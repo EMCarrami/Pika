@@ -1,6 +1,8 @@
+from typing import Optional, Tuple, Union, cast
+
 import torch
-from torch import nn, Tensor
-from typing import Tuple, Optional, Union
+from torch import Tensor, nn
+from transformers.models.gpt2.modeling_gpt2 import GPT2Block
 
 
 class TruncatedESM2(nn.Module):
@@ -14,34 +16,37 @@ class TruncatedESM2(nn.Module):
         :param layer_to_keep: number of transformer layers to keep (if <0 counts the layers from the end)
         """
         super().__init__()
-        assert pretrained_model.__class__.__name__ == 'ESM2'
-        self.embed_tokens = pretrained_model.embed_tokens
+        assert pretrained_model.__class__.__name__ == "ESM2"
+        self.embed_tokens = cast(nn.Module, pretrained_model.embed_tokens)
         self.embed_scale = pretrained_model.embed_scale
-        self.padding_idx = pretrained_model.padding_idx
+        self.padding_idx = cast(int, pretrained_model.padding_idx)
 
+        layers = cast(nn.ModuleList, pretrained_model.layers)
+        num_layers = len(layers)
         if layer_to_keep < 0:
-            total_layers = len(pretrained_model.layers)
+            total_layers = num_layers
             layer_to_keep = total_layers + layer_to_keep + 1
-        assert 0 < layer_to_keep <= len(pretrained_model.layers)
+        assert 0 < layer_to_keep <= num_layers
 
-        self.layers = nn.ModuleList([pretrained_model.layers[i] for i in range(layer_to_keep)])
+        self.layers = nn.ModuleList([layers[i] for i in range(layer_to_keep)])
 
     def forward(self, tokens: Tensor) -> Tensor:
         """Apply ESM2 encoding operations."""
         x = self.embed_tokens(tokens) * self.embed_scale
+
         padding_mask = tokens.eq(self.padding_idx)
-        if padding_mask is not None:
-            x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
-        if not padding_mask.any():
-            padding_mask = None
+        x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
+
         x = x.transpose(0, 1)
         for layer in self.layers:
             x, _attn = layer(x, self_attn_padding_mask=padding_mask)
-        return x.transpose(0, 1)
+        out: Tensor = x.transpose(0, 1)
+        return out
 
 
 class FeedForwardNetwork(nn.Module):
     """General FFN module."""
+
     def __init__(self, emb_dim: int, dropout: float, ff_expansion: int = 4) -> None:
         super().__init__()
         self.ffn = nn.Sequential(
@@ -49,38 +54,50 @@ class FeedForwardNetwork(nn.Module):
             nn.Linear(emb_dim, ff_expansion * emb_dim),
             nn.GELU(),
             nn.Linear(ff_expansion * emb_dim, emb_dim),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
         )
 
     def forward(self, hidden_states: Tensor) -> Tensor:
-        return self.ffn(hidden_states)
+        out: Tensor = self.ffn(hidden_states)
+        return out
 
 
 class PerceiverLayer(nn.Module):
     """Simple Perceiver layer."""
+
     def __init__(self, emb_dim: int, num_heads: int, dropout: float) -> None:
+        """Init."""
         super().__init__()
         self.latent_layer_norm = nn.LayerNorm(emb_dim)
         self.input_layer_norm = nn.LayerNorm(emb_dim)
-        self.attn = nn.MultiheadAttention(emb_dim, num_heads, dropout=dropout, batch_first=True)
+        self.attn = nn.MultiheadAttention(
+            emb_dim, num_heads, dropout=dropout, batch_first=True
+        )
         self.ffn = FeedForwardNetwork(emb_dim, dropout)
 
     def forward(self, latents: Tensor, hidden_states: Tensor) -> Tensor:
         """Cross-attend hidden_states and latents and self-attend latents."""
         residuals = latents
         latents = self.latent_layer_norm(latents)
-        hidden_latents = torch.cat((self.input_layer_norm(hidden_states), latents), dim=-2)
+        hidden_latents = torch.cat(
+            (self.input_layer_norm(hidden_states), latents), dim=-2
+        )
         latents, _ = self.attn(latents, hidden_latents, hidden_latents)
-        return self.ffn(residuals + latents) + residuals
+        out: Tensor = self.ffn(residuals + latents) + residuals
+        return out
 
 
 class Perceiver(nn.Module):
     """Perceiver module that handles dim mismatch."""
+
     def __init__(
-            self,
-            input_dim: int,
-            latent_size: int,
-            emb_dim: int, num_heads: int, num_layers: int, dropout: float
+        self,
+        input_dim: int,
+        latent_size: int,
+        emb_dim: int,
+        num_heads: int,
+        num_layers: int,
+        dropout: float,
     ) -> None:
         """
         Initialize Perceiver.
@@ -109,16 +126,19 @@ class Perceiver(nn.Module):
         hidden_states = self.input_proj(hidden_states)
         for layer in self.layers:
             latents = layer(latents, hidden_states)
-        return self.out_layer_norm(latents)
+        out: Tensor = self.out_layer_norm(latents)
+        return out
 
 
 class CrossAttentionDecoderLayer(nn.Module):
+    """Cross attention decoder layer to inject into a default GPT decoder."""
+
     def __init__(
         self,
         protein_emb_dim: int,
-        decoder: nn.Module,
+        decoder: GPT2Block,
         perceiver_latent_size: int = 100,
-        num_perceiver_layers: int = 1
+        num_perceiver_layers: int = 1,
     ) -> None:
         super().__init__()
         text_emb_dim = decoder.attn.c_attn.weight.size(0)
@@ -131,15 +151,12 @@ class CrossAttentionDecoderLayer(nn.Module):
             text_emb_dim,
             num_heads,
             num_perceiver_layers,
-            dropout
+            dropout,
         )
 
         self.text_layer_norm = nn.LayerNorm(text_emb_dim)
         self.cross_attn = nn.MultiheadAttention(
-            text_emb_dim,
-            num_heads,
-            dropout=dropout,
-            batch_first=True
+            text_emb_dim, num_heads, dropout=dropout, batch_first=True
         )
 
         self.attn_gate = nn.Parameter(torch.tensor([0.0]))
@@ -157,14 +174,19 @@ class CrossAttentionDecoderLayer(nn.Module):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-    ) -> Union[Tuple[torch.Tensor], Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]]]:
+    ) -> Union[
+        Tuple[torch.Tensor],
+        Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]],
+    ]:
 
         # TODO: implement this. Need to see how best to handle it for cross attention
         #   Note to self: In generation only the last token is passed to the model, so k, v must be cached
-        assert use_cache is False, "use_cache not implemented yet"
+        assert use_cache is False, "use_cache not implemented yet."
 
         # TODO: implement this. Note that self.config.add_cross_attention must be set True for aggregation
-        assert output_attentions is False, "output_attentions for cross-attention not implemented yet."
+        assert (
+            output_attentions is False
+        ), "output_attentions for cross-attention not implemented yet."
 
         text = hidden_states
         protein = encoder_hidden_states
@@ -180,7 +202,7 @@ class CrossAttentionDecoderLayer(nn.Module):
             self.text_layer_norm(text),
             protein,
             protein,
-            attn_mask=encoder_attention_mask
+            attn_mask=encoder_attention_mask,
         )
 
         # TODO: consider making the gate dependent on the embedding:
@@ -189,7 +211,7 @@ class CrossAttentionDecoderLayer(nn.Module):
         hidden_states = self.ffn(hidden_states)
         hidden_states = hidden_states * self.attn_gate + text
 
-        return self.decoder(
+        return self.decoder(  # type: ignore[no-any-return]
             hidden_states,
             layer_past=layer_past,
             attention_mask=attention_mask,
@@ -197,8 +219,9 @@ class CrossAttentionDecoderLayer(nn.Module):
             encoder_hidden_states=None,
             encoder_attention_mask=None,
             use_cache=use_cache,
-            output_attentions=output_attentions
+            output_attentions=output_attentions,
         )
+
 
 # TODO: Implement double-cross-attention:
 #   Latents query the "question" first to see what should be queried from protein.

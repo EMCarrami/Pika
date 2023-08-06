@@ -209,7 +209,7 @@ class CrossAttentionDecoderLayer(nn.Module):
         #   (chooses how much each word embedding should care about the protein sequences)
         hidden_states = attn_out * self.attn_gate + text
         hidden_states = self.ffn(hidden_states)
-        hidden_states = hidden_states * self.attn_gate + text
+        hidden_states = hidden_states * self.ff_gate + text
 
         return self.decoder(  # type: ignore[no-any-return]
             hidden_states,

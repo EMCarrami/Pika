@@ -5,131 +5,6 @@ from torch import Tensor, nn
 from transformers.models.gpt2.modeling_gpt2 import GPT2Block
 
 
-class TruncatedESM2(nn.Module):
-    """Truncates an existing pre-trained ESM2 model."""
-
-    def __init__(self, pretrained_model: nn.Module, layer_to_keep: int):
-        """
-        Truncate an ESM2 model to only compute the necessary encodings.
-
-        :param pretrained_model: Initialized ESM2 pre-trained model
-        :param layer_to_keep: number of transformer layers to keep (if <0 counts the layers from the end)
-        """
-        super().__init__()
-        assert pretrained_model.__class__.__name__ == "ESM2"
-        self.embed_tokens = cast(nn.Module, pretrained_model.embed_tokens)
-        self.embed_scale = pretrained_model.embed_scale
-        self.padding_idx = cast(int, pretrained_model.padding_idx)
-
-        layers = cast(nn.ModuleList, pretrained_model.layers)
-        num_layers = len(layers)
-        if layer_to_keep < 0:
-            total_layers = num_layers
-            layer_to_keep = total_layers + layer_to_keep + 1
-        assert 0 < layer_to_keep <= num_layers
-
-        self.layers = nn.ModuleList([layers[i] for i in range(layer_to_keep)])
-
-    def forward(self, tokens: Tensor) -> Tensor:
-        """Apply ESM2 encoding operations."""
-        x = self.embed_tokens(tokens) * self.embed_scale
-
-        padding_mask = tokens.eq(self.padding_idx)
-        x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
-
-        x = x.transpose(0, 1)
-        for layer in self.layers:
-            x, _attn = layer(x, self_attn_padding_mask=padding_mask)
-        out: Tensor = x.transpose(0, 1)
-        return out
-
-
-class FeedForwardNetwork(nn.Module):
-    """General FFN module."""
-
-    def __init__(self, emb_dim: int, dropout: float, ff_expansion: int = 4) -> None:
-        super().__init__()
-        self.ffn = nn.Sequential(
-            nn.LayerNorm(emb_dim),
-            nn.Linear(emb_dim, ff_expansion * emb_dim),
-            nn.GELU(),
-            nn.Linear(ff_expansion * emb_dim, emb_dim),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, hidden_states: Tensor) -> Tensor:
-        out: Tensor = self.ffn(hidden_states)
-        return out
-
-
-class PerceiverLayer(nn.Module):
-    """Simple Perceiver layer."""
-
-    def __init__(self, emb_dim: int, num_heads: int, dropout: float) -> None:
-        """Init."""
-        super().__init__()
-        self.latent_layer_norm = nn.LayerNorm(emb_dim)
-        self.input_layer_norm = nn.LayerNorm(emb_dim)
-        self.attn = nn.MultiheadAttention(
-            emb_dim, num_heads, dropout=dropout, batch_first=True
-        )
-        self.ffn = FeedForwardNetwork(emb_dim, dropout)
-
-    def forward(self, latents: Tensor, hidden_states: Tensor) -> Tensor:
-        """Cross-attend hidden_states and latents and self-attend latents."""
-        residuals = latents
-        latents = self.latent_layer_norm(latents)
-        hidden_latents = torch.cat(
-            (self.input_layer_norm(hidden_states), latents), dim=-2
-        )
-        latents, _ = self.attn(latents, hidden_latents, hidden_latents)
-        out: Tensor = self.ffn(residuals + latents) + residuals
-        return out
-
-
-class Perceiver(nn.Module):
-    """Perceiver module that handles dim mismatch."""
-
-    def __init__(
-        self,
-        input_dim: int,
-        latent_size: int,
-        emb_dim: int,
-        num_heads: int,
-        num_layers: int,
-        dropout: float,
-    ) -> None:
-        """
-        Initialize Perceiver.
-
-        Takes as input an embedded sequence of any_len x input_dim and generates latent_size x emb_dim output.
-        The correction of embedding dimensions of the input sequence occurs before the attention blocks.
-        :param input_dim: embedding dimension of the input hidden states
-        :param latent_size: length of the latent dimension
-        :param emb_dim: embedding dimension of the output latents
-        :param num_heads: number of attention heads
-        :param num_layers: number of transformer layers
-        :param dropout: dropout rate
-        """
-        super().__init__()
-        self.latents = nn.Parameter(torch.randn(latent_size, emb_dim))
-        self.input_layer_norm = nn.LayerNorm(input_dim)
-        self.input_proj = nn.Linear(input_dim, emb_dim, bias=False)
-        self.layers = nn.ModuleList(
-            [PerceiverLayer(emb_dim, num_heads, dropout) for _ in range(num_layers)]
-        )
-        self.out_layer_norm = nn.LayerNorm(emb_dim)
-
-    def forward(self, hidden_states: Tensor) -> Tensor:
-        latents = self.latents.repeat(hidden_states.size(0), 1, 1)
-        hidden_states = self.input_layer_norm(hidden_states)
-        hidden_states = self.input_proj(hidden_states)
-        for layer in self.layers:
-            latents = layer(latents, hidden_states)
-        out: Tensor = self.out_layer_norm(latents)
-        return out
-
-
 class CrossAttentionDecoderLayer(nn.Module):
     """Cross attention decoder layer to inject into a default GPT decoder."""
 
@@ -221,6 +96,131 @@ class CrossAttentionDecoderLayer(nn.Module):
             use_cache=use_cache,
             output_attentions=output_attentions,
         )
+
+
+class Perceiver(nn.Module):
+    """Perceiver module that handles dim mismatch."""
+
+    def __init__(
+        self,
+        input_dim: int,
+        latent_size: int,
+        emb_dim: int,
+        num_heads: int,
+        num_layers: int,
+        dropout: float,
+    ) -> None:
+        """
+        Initialize Perceiver.
+
+        Takes as input an embedded sequence of any_len x input_dim and generates latent_size x emb_dim output.
+        The correction of embedding dimensions of the input sequence occurs before the attention blocks.
+        :param input_dim: embedding dimension of the input hidden states
+        :param latent_size: length of the latent dimension
+        :param emb_dim: embedding dimension of the output latents
+        :param num_heads: number of attention heads
+        :param num_layers: number of transformer layers
+        :param dropout: dropout rate
+        """
+        super().__init__()
+        self.latents = nn.Parameter(torch.randn(latent_size, emb_dim))
+        self.input_layer_norm = nn.LayerNorm(input_dim)
+        self.input_proj = nn.Linear(input_dim, emb_dim, bias=False)
+        self.layers = nn.ModuleList(
+            [PerceiverLayer(emb_dim, num_heads, dropout) for _ in range(num_layers)]
+        )
+        self.out_layer_norm = nn.LayerNorm(emb_dim)
+
+    def forward(self, hidden_states: Tensor) -> Tensor:
+        latents = self.latents.repeat(hidden_states.size(0), 1, 1)
+        hidden_states = self.input_layer_norm(hidden_states)
+        hidden_states = self.input_proj(hidden_states)
+        for layer in self.layers:
+            latents = layer(latents, hidden_states)
+        out: Tensor = self.out_layer_norm(latents)
+        return out
+
+
+class PerceiverLayer(nn.Module):
+    """Simple Perceiver layer."""
+
+    def __init__(self, emb_dim: int, num_heads: int, dropout: float) -> None:
+        """Init."""
+        super().__init__()
+        self.latent_layer_norm = nn.LayerNorm(emb_dim)
+        self.input_layer_norm = nn.LayerNorm(emb_dim)
+        self.attn = nn.MultiheadAttention(
+            emb_dim, num_heads, dropout=dropout, batch_first=True
+        )
+        self.ffn = FeedForwardNetwork(emb_dim, dropout)
+
+    def forward(self, latents: Tensor, hidden_states: Tensor) -> Tensor:
+        """Cross-attend hidden_states and latents and self-attend latents."""
+        residuals = latents
+        latents = self.latent_layer_norm(latents)
+        hidden_latents = torch.cat(
+            (self.input_layer_norm(hidden_states), latents), dim=-2
+        )
+        latents, _ = self.attn(latents, hidden_latents, hidden_latents)
+        out: Tensor = self.ffn(residuals + latents) + residuals
+        return out
+
+
+class FeedForwardNetwork(nn.Module):
+    """General FFN module."""
+
+    def __init__(self, emb_dim: int, dropout: float, ff_expansion: int = 4) -> None:
+        super().__init__()
+        self.ffn = nn.Sequential(
+            nn.LayerNorm(emb_dim),
+            nn.Linear(emb_dim, ff_expansion * emb_dim),
+            nn.GELU(),
+            nn.Linear(ff_expansion * emb_dim, emb_dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, hidden_states: Tensor) -> Tensor:
+        out: Tensor = self.ffn(hidden_states)
+        return out
+
+
+class TruncatedESM2(nn.Module):
+    """Truncates an existing pre-trained ESM2 model."""
+
+    def __init__(self, pretrained_model: nn.Module, layer_to_keep: int):
+        """
+        Truncate an ESM2 model to only compute the necessary encodings.
+
+        :param pretrained_model: Initialized ESM2 pre-trained model
+        :param layer_to_keep: number of transformer layers to keep (if <0 counts the layers from the end)
+        """
+        super().__init__()
+        assert pretrained_model.__class__.__name__ == "ESM2"
+        self.embed_tokens = cast(nn.Module, pretrained_model.embed_tokens)
+        self.embed_scale = pretrained_model.embed_scale
+        self.padding_idx = cast(int, pretrained_model.padding_idx)
+
+        layers = cast(nn.ModuleList, pretrained_model.layers)
+        num_layers = len(layers)
+        if layer_to_keep < 0:
+            total_layers = num_layers
+            layer_to_keep = total_layers + layer_to_keep + 1
+        assert 0 < layer_to_keep <= num_layers
+
+        self.layers = nn.ModuleList([layers[i] for i in range(layer_to_keep)])
+
+    def forward(self, tokens: Tensor) -> Tensor:
+        """Apply ESM2 encoding operations."""
+        x = self.embed_tokens(tokens) * self.embed_scale
+
+        padding_mask = tokens.eq(self.padding_idx)
+        x = x * (1 - padding_mask.unsqueeze(-1).type_as(x))
+
+        x = x.transpose(0, 1)
+        for layer in self.layers:
+            x, _attn = layer(x, self_attn_padding_mask=padding_mask)
+        out: Tensor = x.transpose(0, 1)
+        return out
 
 
 # TODO: Implement double-cross-attention:

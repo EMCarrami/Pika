@@ -5,6 +5,6 @@ chat
 
 ```bash
 conda create --name cprt python=3.10
-conda activate rfm
+conda activate cprt
 pip install -r requirements.txt
 ```

@@ -3,7 +3,7 @@ import gzip
 import pickle
 from collections import defaultdict
 from copy import deepcopy
-from typing import Dict, List, Literal, Tuple, Union
+from typing import Dict, List, Literal, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from cprt.utils import DATA_PATH
 
-keep_fields = [
+KEEP_FIELDS = [
     "GO",
     "Pfam",
     "InterPro",
@@ -68,11 +68,11 @@ def process_id_mapping() -> None:
             pickle.dump(dct, f)
 
 
-def get_num_info_fields(n: str) -> int:
+def get_num_info_fields(uniprot_id: str) -> int:
     """Get number of useful info fields for the given uniprot_id: n from pkl file."""
-    with open(f"{DATA_PATH}/swiss_prot/{n}.pkl", "rb") as f:
+    with open(f"{DATA_PATH}/swiss_prot/{uniprot_id}.pkl", "rb") as f:
         d = pickle.load(f)
-    return len([k for k in d if k in keep_fields])
+    return len([k for k in d if k in KEEP_FIELDS])
 
 
 def merge_clusters(uniref_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
@@ -137,7 +137,7 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
             if cluster_rep is not None and gzip_info[cluster_rep] == best_score:
                 rank1_idx = cluster_rep
             else:
-                rank1_idx = np.argmax(gzip_info)
+                rank1_idx = cast(int, np.argmax(gzip_info))
 
             extra_info = []
             for d in all_data:
@@ -152,7 +152,7 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
             ):
                 rank2_idx = cluster_rep
             else:
-                rank2_idx = np.argmax(extra_info)
+                rank2_idx = cast(int, np.argmax(extra_info))
 
             add_line_to_csv(
                 (uniref, id_list[rank1_idx], info_fields[rank1_idx], 1), out_file_name
@@ -177,7 +177,7 @@ def get_uniref_cluster_data(
         cluster_rep_name = n if n in uniref_id else cluster_rep_name
         with open(f"{DATA_PATH}/swiss_prot/{n}.pkl", "rb") as f:
             info = pickle.load(f)
-        fields = [k for k in info if k in keep_fields]
+        fields = [k for k in info if k in KEEP_FIELDS]
         info_fields.append("; ".join(fields))
         keep_data = [f'{k}: {";".join(info[k])}' for k in fields]
         all_data.append("\n".join(keep_data))

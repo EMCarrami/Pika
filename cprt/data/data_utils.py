@@ -11,7 +11,9 @@ from tqdm import tqdm
 
 from cprt.utils import DATA_PATH
 
-KEEP_FIELDS = [
+BASE_FIELDS = ["sequence", "taxon", "mw", "length"]
+
+INFO_FIELDS = [
     "GO",
     "Pfam",
     "InterPro",
@@ -21,8 +23,11 @@ KEEP_FIELDS = [
     "cofactor",
     "subunit",
     "subcellular location",
-    "biophysicochemical properties",
+    "pH dependence",
+    "temperature dependence",
 ]
+
+# TODO: Include helix and strands in data fields
 
 
 def process_id_mapping() -> None:
@@ -72,7 +77,7 @@ def get_num_info_fields(uniprot_id: str) -> int:
     """Get number of useful info fields for the given uniprot_id: n from pkl file."""
     with open(f"{DATA_PATH}/swiss_prot/{uniprot_id}.pkl", "rb") as f:
         d = pickle.load(f)
-    return len([k for k in d if k in KEEP_FIELDS])
+    return len([k for k in d if k in INFO_FIELDS])
 
 
 def merge_clusters(uniref_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
@@ -117,90 +122,118 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
     with open(f"{DATA_PATH}/uniref{uniref_identity}_merged_dict.pkl", "rb") as f:
         uniref_dict = pickle.load(f)
 
-    out_file_name = f"{DATA_PATH}/gzip_subsample_uniref{uniref_identity}.csv"
+    out_file_name = f"{DATA_PATH}/uniref{uniref_identity}_gzip_subsample.csv"
     with open(out_file_name, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(("cluster_id", "uniprot_id", "info_fields", "rank_in_cluster"))
 
+    dataset = {}
     for uniref, uniprots in tqdm(uniref_dict.items()):
         # get data for valid uniprot_ids in cluster
-        (
-            id_list,
-            all_data,
-            info_fields,
-            gzip_info,
-            cluster_rep,
-        ) = get_uniref_cluster_data(uniprots, uniref)
+        df, cluster_rep_uid = get_uniref_cluster_data(uniprots, uniref)
+
+        id_list = df["uniprot_id"].to_list()
+        data_dicts = df["data_dict"].to_list()
+        info_fields = df["data_fields"].to_list()
+        text_data = df["text_data"].to_list()
+        gzip_info = df["gzip_info"].to_list()
 
         if len(id_list) > 1:
-            best_score = max(gzip_info)
-            if cluster_rep is not None and gzip_info[cluster_rep] == best_score:
-                rank1_idx = cluster_rep
-            else:
-                rank1_idx = cast(int, np.argmax(gzip_info))
-
-            extra_info = []
-            for d in all_data:
-                joint_info = len(gzip.compress(f"{all_data[rank1_idx]}\n{d}".encode()))
-                extra_info.append(joint_info - gzip_info[rank1_idx])
-
-            best_score = max(extra_info)
-            if (
-                cluster_rep is not None
-                and cluster_rep != rank1_idx
-                and extra_info[cluster_rep] == best_score
-            ):
-                rank2_idx = cluster_rep
-            else:
-                rank2_idx = cast(int, np.argmax(extra_info))
-
-            add_line_to_csv(
-                (uniref, id_list[rank1_idx], info_fields[rank1_idx], 1), out_file_name
-            )
-            add_line_to_csv(
-                (uniref, id_list[rank2_idx], info_fields[rank2_idx], 2), out_file_name
-            )
+            top_ranks = get_top_info_ids(id_list, text_data, gzip_info, cluster_rep_uid)
+            for r, idx in enumerate(top_ranks):
+                uid = id_list[idx]
+                dataset[uid] = data_dicts[idx]
+                add_line_to_csv((uniref, uid, info_fields[idx], r + 1), out_file_name)
         else:
+            dataset[id_list[0]] = data_dicts[0]
             add_line_to_csv((uniref, id_list[0], info_fields[0], 0), out_file_name)
+
+    with open(f"{DATA_PATH}/uniref90_subsample_data.pkl", "wb") as f:
+        pickle.dump(dataset, f)
 
 
 def get_uniref_cluster_data(
     id_list: List[str], uniref_id: str
-) -> Tuple[
-    Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Tuple[int, ...], Union[int, None]
-]:
-    """Collect and filter the data for each uniprot_id."""
-    all_data, info_fields, gzip_info, lengths = [], [], [], []
-    cluster_rep_name = ""
+) -> Tuple[pd.DataFrame, str]:
+    """
+    Collect and filter the data for each uniprot_id.
 
-    for idx, n in enumerate(id_list):
-        cluster_rep_name = n if n in uniref_id else cluster_rep_name
-        with open(f"{DATA_PATH}/swiss_prot/{n}.pkl", "rb") as f:
-            info = pickle.load(f)
-        fields = [k for k in info if k in KEEP_FIELDS]
-        info_fields.append("; ".join(fields))
-        keep_data = [f'{k}: {";".join(info[k])}' for k in fields]
-        all_data.append("\n".join(keep_data))
-        gzip_info.append(len(gzip.compress(all_data[-1].encode())))
-        lengths.append(info["length"])
+    Filtering based on ratio of the sequence length to the median of the cluster
+    :param id_list: list of all uniprot_ids in the uniref cluster
+    :param uniref_id: uniref cluster id
+
+    :return: filtered DataFrame with columns uniprot_id, data_dict, data_fields, text_data, gzip_info
+            and uid of cluster_representative if among uniprot_ids, otherwise ''
+    """
+    # data_rows: uniprot_id, data_dict, data_fields, text_data, gzip_info
+    data_rows = []
+    lengths = []
+    cluster_rep_uid = ""
+
+    for uid in id_list:
+        cluster_rep_uid = uid if uid in uniref_id else cluster_rep_uid
+        with open(f"{DATA_PATH}/swiss_prot/{uid}.pkl", "rb") as f:
+            info_dict = pickle.load(f)
+
+        lengths.append(info_dict["length"])
+
+        # text of info_fields for gzip info
+        info_fields = [k for k in info_dict if k in INFO_FIELDS]
+        text_data = "\n".join([f'{k}: {"; ".join(info_dict[k])}' for k in info_fields])
+
+        # all fields for dataset
+        all_fields = BASE_FIELDS + info_fields
+
+        data_rows.append(
+            (
+                uid,
+                {k: info_dict[k] for k in all_fields},
+                ";".join(all_fields),
+                text_data,
+                len(gzip.compress(text_data.encode())),
+            )
+        )
 
     median_len: float = np.median(lengths)
     len_ratios = np.array(lengths) / median_len
-    id_list, all_data, info_fields, gzip_info = zip(
-        *[
-            (n, d, f, g)
-            for n, d, f, g, l in zip(
-                id_list, all_data, info_fields, gzip_info, len_ratios
-            )
-            if l > 0.25
-        ]
+
+    df = pd.DataFrame(
+        data_rows,
+        columns=["uniprot_id", "data_dict", "data_fields", "text_data", "gzip_info"],
+    )
+    df = df[len_ratios > 0.25]
+    df.reset_index(drop=True, inplace=True)
+
+    return df, cluster_rep_uid
+
+
+def get_top_info_ids(
+    id_list: List[str], text_data: List[str], gzip_info: List[int], cluster_rep_uid: str
+) -> Tuple[int, int]:
+    """Find the top ranking indices of data with highest gzip info."""
+    cluster_rep_idx = (
+        id_list.index(cluster_rep_uid) if cluster_rep_uid in id_list else None
     )
 
-    cluster_rep = (
-        id_list.index(cluster_rep_name) if cluster_rep_name in id_list else None
-    )
+    rank1_idx = get_best_score_idx(gzip_info, cluster_rep_idx)
 
-    return id_list, all_data, info_fields, gzip_info, cluster_rep
+    extra_info = []
+    for d in text_data:
+        joint_info = len(gzip.compress(f"{text_data[rank1_idx]}\n{d}".encode()))
+        extra_info.append(joint_info - gzip_info[rank1_idx])
+    extra_info[rank1_idx] = -1
+    rank2_idx = get_best_score_idx(extra_info, cluster_rep_idx)
+
+    return rank1_idx, rank2_idx
+
+
+def get_best_score_idx(scores: List[int], priority_idx: Union[int, None]) -> int:
+    """Return the index of best score, prioritise priority_idx if a best scorer."""
+    best_score = max(scores)
+    if priority_idx is not None and scores[priority_idx] == best_score:
+        return priority_idx
+    else:
+        return cast(int, np.argmax(scores))
 
 
 def add_line_to_csv(row: Tuple[str, str, str, int], out_file_name: str) -> None:

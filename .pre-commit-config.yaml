@@ -26,9 +26,10 @@ repos:
       args: [
         --strict,
         --install-types,
-        --non-interactive
+        --non-interactive,
+        --incremental
       ]
-      additional_dependencies: ['torch==2.0.0']
+      additional_dependencies: ['torch>=2.0.0', 'pytorch-lightning>=2.0.0', 'numpy']
       files: \.py$
 
 -   repo: https://github.com/pycqa/isort

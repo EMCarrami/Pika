@@ -70,8 +70,8 @@ class CrossAttentionDecoderLayer(nn.Module):
 
         if encoder_attention_mask is not None:
             # TODO:
-            #   remove the parts of the text that are not needed to attend to
-            #   and only update the relevant sections in the hidden states
+            #   implement to handle the parts of the text that are not needed to attend to
+            #   or the padded parts of the sequence embeddings (perciever may handle this though)
             pass
         attn_out, _ = self.cross_attn(
             self.text_layer_norm(text),

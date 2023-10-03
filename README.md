@@ -4,7 +4,8 @@ chat
 ## Install
 
 ```bash
-conda create --name cprt python=3.10
+yes | conda create --name cprt python=3.10
 conda activate cprt
-pip install -r requirements.txt
+pip install -e .[dev]
+pre-commit install
 ```

@@ -17,13 +17,13 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self,
         language_model: str = "gpt2",
         protein_model: str = "esm2_t6_8M_UR50D",
-        protein_layer_to_keep: int = -1,
+        protein_layer_to_use: int = -1,
     ) -> None:
         """Initialize language and protein encoders."""
         super().__init__()
 
         esm, _ = torch.hub.load("facebookresearch/esm:main", protein_model)  # type: ignore[no-untyped-call]
-        self.esm = TruncatedESM2(esm, protein_layer_to_keep)
+        self.esm = TruncatedESM2(esm, protein_layer_to_use)
         for param in self.esm.parameters():
             param.requires_grad = False
 

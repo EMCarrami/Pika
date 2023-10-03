@@ -11,14 +11,10 @@ from tqdm import tqdm
 
 from cprt.utils import DATA_PATH
 
-BASE_FIELDS = ["sequence", "taxon", "mw", "length"]
+BASE_FIELDS = ["taxonomy", "protein size"]
 
 INFO_FIELDS = [
-    "GO",
-    "Pfam",
-    "InterPro",
-    "Gene3D",
-    "SUPFAM",
+    "functional domains",
     "catalytic activity",
     "cofactor",
     "subunit",
@@ -26,8 +22,6 @@ INFO_FIELDS = [
     "pH dependence",
     "temperature dependence",
 ]
-
-# TODO: Include helix and strands in data fields
 
 
 def process_id_mapping() -> None:
@@ -39,13 +33,10 @@ def process_id_mapping() -> None:
     idmapping file downloaded from uniprot ftp: idmapping_selected.tab.gz
     files were processed to remove unnecessary data:
     awk '{
-        if (NR==FNR) {if ($3>29) A[$1];}
-        else {
-            if ($1 in A) print $0
-            }
-        }' uniprotkb_reviewed_true_2023_08_14.tsv <(zcat idmapping_selected.tab.gz) > uniprot_to_uniref.tsv
+        if (NR==FNR) {A[$1];}
+        else {if ($1 in A) print $0;}
+        }' merged_filtered_processed_ids.tsv <(zcat idmapping_selected.tab.gz) > uniprot_to_uniref.tsv
     """
-    # TODO: change the pre-pre-process to use yield
     id_map = pd.read_csv(f"{DATA_PATH}/uniprot_to_uniref.tsv", sep="\t", header=None)[
         [0, 7, 8, 9]
     ]
@@ -54,9 +45,8 @@ def process_id_mapping() -> None:
     )
     uniref90_dict, uniref50_dict = defaultdict(list), defaultdict(list)
     for _, row in tqdm(id_map.iterrows(), total=len(id_map)):
-        if get_num_info_fields(row.id) > 0:
-            uniref50_dict[row.uniref50].append(row.id)
-            uniref90_dict[row.uniref90].append(row.id)
+        uniref50_dict[row.uniref50].append(row.id)
+        uniref90_dict[row.uniref90].append(row.id)
 
     merged50 = merge_clusters(uniref50_dict)
     merged90 = merge_clusters(uniref90_dict)
@@ -71,13 +61,6 @@ def process_id_mapping() -> None:
     for dct, fn in zip(dicts, file_names):
         with open(f"{DATA_PATH}/{fn}.pkl", "wb") as f:
             pickle.dump(dct, f)
-
-
-def get_num_info_fields(uniprot_id: str) -> int:
-    """Get number of useful info fields for the given uniprot_id: n from pkl file."""
-    with open(f"{DATA_PATH}/swiss_prot/{uniprot_id}.pkl", "rb") as f:
-        d = pickle.load(f)
-    return len([k for k in d if k in INFO_FIELDS])
 
 
 def merge_clusters(uniref_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
@@ -122,6 +105,9 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
     with open(f"{DATA_PATH}/uniref{uniref_identity}_merged_dict.pkl", "rb") as f:
         uniref_dict = pickle.load(f)
 
+    with open(f"{DATA_PATH}/merged_uniprot_data.pkl", "rb") as f:
+        all_uniprot_data = pickle.load(f)
+
     out_file_name = f"{DATA_PATH}/uniref{uniref_identity}_gzip_subsample.csv"
     with open(out_file_name, "w", newline="") as f:
         writer = csv.writer(f)
@@ -130,7 +116,9 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
     dataset = {}
     for uniref, uniprots in tqdm(uniref_dict.items()):
         # get data for valid uniprot_ids in cluster
-        df, cluster_rep_uid = get_uniref_cluster_data(uniprots, uniref)
+        df, cluster_rep_uid = get_uniref_cluster_data(
+            uniprots, uniref, all_uniprot_data
+        )
 
         id_list = df["uniprot_id"].to_list()
         data_dicts = df["data_dict"].to_list()
@@ -148,12 +136,12 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
             dataset[id_list[0]] = data_dicts[0]
             add_line_to_csv((uniref, id_list[0], info_fields[0], 0), out_file_name)
 
-    with open(f"{DATA_PATH}/uniref90_subsample_data.pkl", "wb") as f:
+    with open(f"{DATA_PATH}/uniref{uniref_identity}_subsample_data.pkl", "wb") as f:
         pickle.dump(dataset, f)
 
 
 def get_uniref_cluster_data(
-    id_list: List[str], uniref_id: str
+    id_list: List[str], uniref_id: str, uniprot_data: Dict[str, Dict[str, List[str]]]
 ) -> Tuple[pd.DataFrame, str]:
     """
     Collect and filter the data for each uniprot_id.
@@ -161,6 +149,7 @@ def get_uniref_cluster_data(
     Filtering based on ratio of the sequence length to the median of the cluster
     :param id_list: list of all uniprot_ids in the uniref cluster
     :param uniref_id: uniref cluster id
+    :param uniprot_data: Dict of all uniprot data
 
     :return: filtered DataFrame with columns uniprot_id, data_dict, data_fields, text_data, gzip_info
             and uid of cluster_representative if among uniprot_ids, otherwise ''
@@ -172,14 +161,15 @@ def get_uniref_cluster_data(
 
     for uid in id_list:
         cluster_rep_uid = uid if uid in uniref_id else cluster_rep_uid
-        with open(f"{DATA_PATH}/swiss_prot/{uid}.pkl", "rb") as f:
-            info_dict = pickle.load(f)
+        info_dict = uniprot_data[uid]
 
-        lengths.append(info_dict["length"])
+        lengths.append(int(info_dict["length"][0]))
 
         # text of info_fields for gzip info
         info_fields = [k for k in info_dict if k in INFO_FIELDS]
-        text_data = "\n".join([f'{k}: {"; ".join(info_dict[k])}' for k in info_fields])
+        text_data = "\n".join(
+            [f'{k}: {"; ".join(set(info_dict[k]))}' for k in info_fields]
+        )
 
         # all fields for dataset
         all_fields = BASE_FIELDS + info_fields
@@ -187,14 +177,14 @@ def get_uniref_cluster_data(
         data_rows.append(
             (
                 uid,
-                {k: info_dict[k] for k in all_fields},
+                {k: list(set(info_dict[k])) for k in all_fields},
                 ";".join(all_fields),
                 text_data,
                 len(gzip.compress(text_data.encode())),
             )
         )
 
-    median_len: float = np.median(lengths)
+    median_len = np.median(lengths)
     len_ratios = np.array(lengths) / median_len
 
     df = pd.DataFrame(

@@ -3,13 +3,13 @@ import gzip
 import pickle
 from collections import defaultdict
 from copy import deepcopy
-from typing import Dict, List, Literal, Tuple, Union, cast
+from typing import Any, Dict, List, Literal, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cprt.utils import DATA_PATH
+from cprt.utils import DATA_PATH, ROOT
 
 BASE_FIELDS = ["taxonomy", "protein size"]
 
@@ -162,6 +162,9 @@ def get_uniref_cluster_data(
     for uid in id_list:
         cluster_rep_uid = uid if uid in uniref_id else cluster_rep_uid
         info_dict = uniprot_data[uid]
+        assert (
+            isinstance(info_dict["sequence"], list) and len(info_dict["sequence"]) == 1
+        )
 
         lengths.append(int(info_dict["length"][0]))
 
@@ -177,7 +180,8 @@ def get_uniref_cluster_data(
         data_rows.append(
             (
                 uid,
-                {k: list(set(info_dict[k])) for k in all_fields},
+                {k: list(set(info_dict[k])) for k in all_fields}
+                | {"sequence": info_dict["sequence"][0]},
                 ";".join(all_fields),
                 text_data,
                 len(gzip.compress(text_data.encode())),
@@ -231,3 +235,39 @@ def add_line_to_csv(row: Tuple[str, str, str, int], out_file_name: str) -> None:
     with open(out_file_name, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(row)
+
+
+def load_data_from_path(data_path: str) -> Union[pd.DataFrame, Dict[str, Any]]:
+    """Load .pkl dicts or .csv tables."""
+    if data_path.startswith("/"):
+        absolute_path = data_path
+    elif "/" not in data_path:
+        absolute_path = f"{DATA_PATH}/{data_path}"
+    else:
+        absolute_path = f"{ROOT}/{data_path}"
+
+    if absolute_path.endswith(".pkl") or absolute_path.endswith(".pickle"):
+        with open(absolute_path, "rb") as f:
+            data_dict: Dict[str, Any] = pickle.load(f)
+            return data_dict
+    elif absolute_path.endswith(".csv"):
+        data_df: pd.DataFrame = pd.read_csv(absolute_path)
+        return data_df
+    else:
+        raise ValueError("only supports .csv and .pkl/.pickle files.")
+
+
+def random_split_df(df: pd.DataFrame, ratios: Sequence[float]) -> None:
+    """Add split column values to df, inplace."""
+    assert (
+        len(ratios) == 3 and sum(ratios) == 1
+    ), f"3 ratio values must sum to 1. {ratios} was given."
+    val_size, test_size = int(len(df) * ratios[1]), int(len(df) * ratios[2])
+    train_size = len(df) - val_size - test_size
+    split_array = np.array(
+        ["train" for _ in range(train_size)]
+        + ["val" for _ in range(val_size)]
+        + ["test" for _ in range(test_size)]
+    )
+    np.random.shuffle(split_array)
+    df["split"] = split_array

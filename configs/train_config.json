@@ -1,0 +1,22 @@
+{
+  "data": {
+    "data_dict_path": "uniref50_subsample_data.pkl",
+    "data_df_path": "uniref50_gzip_subsample.csv",
+    "split_ratios": [0.8, 0.1, 0.1]
+  },
+  "datamodule": {
+    "batch_size": 3
+  },
+  "model": {
+    "language_model": "gpt2",
+    "protein_model": "esm2_t6_8M_UR50D",
+    "protein_layer_to_use": -1
+  },
+  "wandb": {
+    "project": "Cprt"
+  },
+  "trainer": {
+    "max_epochs": 1
+  },
+  "seed": 7
+}

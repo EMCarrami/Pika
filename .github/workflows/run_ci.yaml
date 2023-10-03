@@ -19,7 +19,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements_dev.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements/requirements_dev.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 

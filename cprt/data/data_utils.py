@@ -180,8 +180,7 @@ def get_uniref_cluster_data(
         data_rows.append(
             (
                 uid,
-                {k: list(set(info_dict[k])) for k in all_fields}
-                | {"sequence": info_dict["sequence"][0]},
+                {k: ", ".join(set(info_dict[k])) for k in all_fields + ["sequence"]},
                 ";".join(all_fields),
                 text_data,
                 len(gzip.compress(text_data.encode())),

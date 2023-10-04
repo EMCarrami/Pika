@@ -5,7 +5,8 @@
     "split_ratios": [0.8, 0.1, 0.1]
   },
   "datamodule": {
-    "batch_size": 3
+    "batch_size": 9,
+    "sub_batch_size": 3
   },
   "model": {
     "language_model": "gpt2",

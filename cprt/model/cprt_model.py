@@ -99,19 +99,22 @@ class Cprt(LightningModule):  # type: ignore[misc]
             return_dict=return_dict,
         )
 
-    def general_step(self, batch: CprtData, mode: str) -> Tensor:
+    def general_step(self, batch: Tuple[CprtData, ...], mode: str) -> Tensor:
         """Take a general step."""
-        out = self(
-            protein_ids=batch.protein,
-            info_ids=batch.info,
-            attention_mask=batch.info_mask,
-            labels=batch.labels,
-        )
-        loss: Tensor = out["loss"]
+        losses = []
+        for sub_batch in batch:
+            out = self(
+                protein_ids=sub_batch.protein,
+                info_ids=sub_batch.info,
+                attention_mask=sub_batch.info_mask,
+                labels=sub_batch.labels,
+            )
+            losses.append(out["loss"])
+        loss: Tensor = sum(losses) / len(losses)
         self.log(f"loss/{mode}_loss", loss, prog_bar=True, on_step=True)
         return loss
 
-    def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
+    def training_step(self, batch: Tuple[CprtData, ...], batch_idx: int) -> Tensor:
         """Take a train step."""
         for idx, layer in enumerate(self.cprt_llm.transformer.h):
             self.log(
@@ -120,7 +123,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
             self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item(), on_step=True)
         return self.general_step(batch, "train")
 
-    def validation_step(self, batch: CprtData, batch_idx: int) -> None:
+    def validation_step(self, batch: Tuple[CprtData, ...], batch_idx: int) -> None:
         """Take a val step."""
         self.general_step(batch, "val")
 

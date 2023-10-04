@@ -103,9 +103,9 @@ class Cprt(LightningModule):  # type: ignore[misc]
         """Take a general step."""
         out = self(
             protein_ids=batch.protein,
-            info_ids=batch.info[:, :-1].contiguous(),
-            attention_mask=batch.info_mask[:, :-1].contiguous(),
-            labels=batch.info[:, 1:].contiguous(),
+            info_ids=batch.info,
+            attention_mask=batch.info_mask,
+            labels=batch.labels,
         )
         loss: Tensor = out["loss"]
         self.log(f"loss/{mode}_loss", loss, prog_bar=True, on_step=True)

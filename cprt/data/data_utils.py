@@ -111,7 +111,15 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
     out_file_name = f"{DATA_PATH}/uniref{uniref_identity}_gzip_subsample.csv"
     with open(out_file_name, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(("cluster_id", "uniprot_id", "info_fields", "rank_in_cluster"))
+        writer.writerow(
+            (
+                "cluster_id",
+                "uniprot_id",
+                "info_fields",
+                "protein_length",
+                "rank_in_cluster",
+            )
+        )
 
     dataset = {}
     for uniref, uniprots in tqdm(uniref_dict.items()):
@@ -131,10 +139,16 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
             for r, idx in enumerate(top_ranks):
                 uid = id_list[idx]
                 dataset[uid] = data_dicts[idx]
-                add_line_to_csv((uniref, uid, info_fields[idx], r + 1), out_file_name)
+                length = len(data_dicts[idx]["sequence"][0])
+                add_line_to_csv(
+                    (uniref, uid, info_fields[idx], length, r + 1), out_file_name
+                )
         else:
             dataset[id_list[0]] = data_dicts[0]
-            add_line_to_csv((uniref, id_list[0], info_fields[0], 0), out_file_name)
+            length = len(data_dicts[0]["sequence"][0])
+            add_line_to_csv(
+                (uniref, id_list[0], info_fields[0], length, 0), out_file_name
+            )
 
     with open(f"{DATA_PATH}/uniref{uniref_identity}_subsample_data.pkl", "wb") as f:
         pickle.dump(dataset, f)
@@ -173,17 +187,20 @@ def get_uniref_cluster_data(
         text_data = "\n".join(
             [f'{k}: {"; ".join(set(info_dict[k]))}' for k in info_fields]
         )
+        gzip_info = len(gzip.compress(text_data.encode()))
 
-        # all fields for dataset
-        all_fields = BASE_FIELDS + info_fields
+        # keep all fields for final data_dict (set to remove duplications)
+        data_dic = {k: list(set(info_dict[k])) for k in info_fields}
+        data_dic |= {k: info_dict[k] for k in BASE_FIELDS}
+        data_dic["sequence"] = info_dict["sequence"]
 
         data_rows.append(
             (
                 uid,
-                {k: ", ".join(set(info_dict[k])) for k in all_fields + ["sequence"]},
-                ";".join(all_fields),
+                data_dic,
+                ";".join(BASE_FIELDS + info_fields),
                 text_data,
-                len(gzip.compress(text_data.encode())),
+                gzip_info,
             )
         )
 
@@ -229,7 +246,7 @@ def get_best_score_idx(scores: List[int], priority_idx: Union[int, None]) -> int
         return cast(int, np.argmax(scores))
 
 
-def add_line_to_csv(row: Tuple[str, str, str, int], out_file_name: str) -> None:
+def add_line_to_csv(row: Tuple[str, str, str, int, int], out_file_name: str) -> None:
     """Append a new row to csv file."""
     with open(out_file_name, "a", newline="") as f:
         writer = csv.writer(f)

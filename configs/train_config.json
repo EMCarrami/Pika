@@ -5,8 +5,8 @@
     "split_ratios": [0.8, 0.1, 0.1]
   },
   "datamodule": {
-    "batch_size": 9,
-    "sub_batch_size": 3
+    "batch_size": 4,
+    "max_protein_length": 1500
   },
   "model": {
     "language_model": "gpt2",
@@ -17,7 +17,9 @@
     "project": "Cprt"
   },
   "trainer": {
-    "max_epochs": 1
+    "val_check_interval": 500,
+    "max_epochs": 1,
+    "devices": 1
   },
   "seed": 7
 }

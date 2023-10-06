@@ -29,7 +29,7 @@ repos:
         --non-interactive,
         --incremental
       ]
-      additional_dependencies: ['torch>=2.0.0', 'pytorch-lightning>=2.0.0', 'numpy']
+      additional_dependencies: ['torch>=2.0.0', 'pytorch-lightning>=2.0.0', 'numpy', 'wandb']
       files: \.py$
 
 -   repo: https://github.com/pycqa/isort

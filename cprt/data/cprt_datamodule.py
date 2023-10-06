@@ -1,4 +1,5 @@
 from collections import namedtuple
+from random import sample
 from typing import Dict, List, Literal, Tuple
 
 import pandas as pd
@@ -46,7 +47,9 @@ class CprtDataset(Dataset[Tuple[str, str]]):
         """Get Cprt data for training."""
         uid, info_type = self.split_df.iloc[idx]
         protein_sequence = self.data_dict[uid]["sequence"]
-        info = self.data_dict[uid][info_type]
+        info = " || ".join(self.data_dict[uid][info_type])
+        if len(info) > 1024 and len(self.data_dict[uid][info_type]) > 3:
+            info = " || ".join(sample(self.data_dict[uid][info_type], 3))
         extended_info = f"{self.sequence_placeholder}{info_type}: {info}"
         return protein_sequence, extended_info
 
@@ -61,7 +64,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         esm_model: str = "esm2_t6_8M_UR50D",
         language_model: str = "gpt2",
         batch_size: int = 1024,
-        sub_batch_size: int = 32,
+        max_protein_length: int = 1500,
         sequence_placeholder: str = "[protein sequence placeholder] ",
     ) -> None:
         """
@@ -75,18 +78,16 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         :param esm_model: esm model to use for tokenizer
         :param language_model: language model to use for tokenizer
         :param batch_size: train, val and test main batch size
-        :param sub_batch_size: train, val and test sub batch size for putting similar size proteins together
+        :param max_protein_length: mex length of protein allowed for tokenizer to throw a warning
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
                                         will be ignored in loss computation by setting label to -100
         """
         super().__init__()
-        assert (
-            batch_size % sub_batch_size == 0
-        ), "batch_size must be divisible by sub_batch_size"
         self.batch_size = batch_size
-        self.sub_batch_size = sub_batch_size
 
-        self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{esm_model}")
+        self.protein_tokenizer = AutoTokenizer.from_pretrained(
+            f"facebook/{esm_model}", model_max_length=max_protein_length
+        )
         self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         self.placeholder_length = len(
@@ -133,27 +134,23 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             collate_fn=self.collate_fn,
         )
 
-    def collate_fn(self, batch: List[Tuple[str, str]]) -> Tuple[CprtData, ...]:
+    def collate_fn(self, batch: List[Tuple[str, str]]) -> CprtData:
         """Collate, pad and tokenize protein and info strings."""
-        batch.sort(key=lambda x: len(x[0]), reverse=True)
-        sub_batches = []
-        for i in range(0, self.batch_size, self.sub_batch_size):
-            protein_sequences, info_list = zip(*batch[i : i + self.sub_batch_size])
-            tokenized_info = self.text_tokenizer(
-                info_list, padding=True, return_tensors="pt"
-            )
-
-            labels = tokenized_info["input_ids"][:, 1:].contiguous()
-            labels[:, : self.placeholder_length] = -100
-
-            sub_batches.append(
-                CprtData(
-                    protein=self.protein_tokenizer(
-                        protein_sequences, padding=True, return_tensors="pt"
-                    )["input_ids"],
-                    info=tokenized_info["input_ids"][:, :-1].contiguous(),
-                    info_mask=tokenized_info["attention_mask"][:, :-1].contiguous(),
-                    labels=labels,
-                )
-            )
-        return tuple(sub_batches)
+        protein_sequences, info_list = zip(*batch)
+        tokenized_info = self.text_tokenizer(
+            info_list,
+            padding=True,
+            return_tensors="pt",
+            truncation=True,
+            max_length=1024,
+        )
+        labels = tokenized_info["input_ids"][:, 1:].contiguous()
+        labels[:, : self.placeholder_length] = -100
+        return CprtData(
+            info=tokenized_info["input_ids"][:, :-1].contiguous(),
+            info_mask=tokenized_info["attention_mask"][:, :-1].contiguous(),
+            protein=self.protein_tokenizer(
+                protein_sequences, padding=True, return_tensors="pt"
+            )["input_ids"],
+            labels=labels,
+        )

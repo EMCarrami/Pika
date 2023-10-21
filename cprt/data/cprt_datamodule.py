@@ -85,9 +85,8 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         super().__init__()
         self.batch_size = batch_size
 
-        self.protein_tokenizer = AutoTokenizer.from_pretrained(
-            f"facebook/{esm_model}", model_max_length=max_protein_length
-        )
+        self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{esm_model}")
+        self.protein_tokenizer.model_max_length = max_protein_length
         self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         self.placeholder_length = len(
@@ -114,6 +113,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=self.collate_fn,
+            num_workers=4,
         )
 
     def val_dataloader(self) -> DataLoader:  # type: ignore[type-arg]
@@ -123,6 +123,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             batch_size=self.batch_size,
             shuffle=False,
             collate_fn=self.collate_fn,
+            num_workers=4,
         )
 
     def test_dataloader(self) -> DataLoader:  # type: ignore[type-arg]
@@ -132,6 +133,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             batch_size=self.batch_size,
             shuffle=False,
             collate_fn=self.collate_fn,
+            num_workers=4,
         )
 
     def collate_fn(self, batch: List[Tuple[str, str]]) -> CprtData:

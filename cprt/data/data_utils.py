@@ -190,9 +190,11 @@ def get_uniref_cluster_data(
         gzip_info = len(gzip.compress(text_data.encode()))
 
         # keep all fields for final data_dict (set to remove duplications)
-        data_dic = {k: list(set(info_dict[k])) for k in info_fields}
+        data_dic: Dict[str, List[str] | str] = {
+            k: list(set(info_dict[k])) for k in info_fields
+        }
         data_dic |= {k: info_dict[k] for k in BASE_FIELDS}
-        data_dic["sequence"] = info_dict["sequence"]
+        data_dic["sequence"] = info_dict["sequence"][0]
 
         data_rows.append(
             (

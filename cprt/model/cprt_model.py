@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional, Tuple, cast
 import torch
 from lightning import LightningModule
 from torch import FloatTensor, LongTensor, Tensor, nn
-from transformers import GPT2LMHeadModel
+from torchmetrics.text import BERTScore, BLEUScore, Perplexity
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from cprt.data.cprt_datamodule import CprtData
@@ -28,17 +29,24 @@ class Cprt(LightningModule):  # type: ignore[misc]
             param.requires_grad = False
 
         self.cprt_llm = GPT2LMHeadModel.from_pretrained(language_model)
+        self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
         for param in self.cprt_llm.parameters():
             param.requires_grad = False
         self._add_cross_attention_to_llm()
         self._modify_generation_input_to_llm()
 
+        self.train_perplexity = Perplexity(ignore_index=-100)
+        self.val_perplexity = Perplexity(ignore_index=-100)
+        self.val_bleu_score = BLEUScore()
+        self.val_bert_scores = BERTScore()
+
     def _add_cross_attention_to_llm(self) -> None:
         """Add Cross-Attention layers to all decoder blocks."""
         protein_emb_size = cast(int, self.esm.embed_tokens.embedding_dim)
+        protein_num_heads = self.esm.layers[0].self_attn.num_heads
         cross_attention_block = nn.ModuleList(
             [
-                CrossAttentionDecoderLayer(protein_emb_size, decoder)
+                CrossAttentionDecoderLayer(protein_emb_size, decoder, num_perceiver_heads=protein_num_heads)
                 for decoder in self.cprt_llm.transformer.h
             ]
         )
@@ -52,17 +60,13 @@ class Cprt(LightningModule):  # type: ignore[misc]
         """
         original_method = self.cprt_llm.prepare_inputs_for_generation
 
-        def updated_prepare_inputs_for_generation(
-            *args: Any, **kwargs: Any
-        ) -> Dict[str, Any]:
+        def updated_prepare_inputs_for_generation(*args: Any, **kwargs: Any) -> Dict[str, Any]:
             """Add encoder_hidden_states to model_inputs of GPT2 generation."""
             model_inputs: Dict[str, Any] = original_method(*args, **kwargs)
             model_inputs["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
             return model_inputs
 
-        self.cprt_llm.prepare_inputs_for_generation = (
-            updated_prepare_inputs_for_generation
-        )
+        self.cprt_llm.prepare_inputs_for_generation = updated_prepare_inputs_for_generation
 
     def forward(
         self,
@@ -99,8 +103,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
             return_dict=return_dict,
         )
 
-    def general_step(self, batch: CprtData, mode: str) -> Tensor:
-        """Take a general step."""
+    def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
+        """Take a train step."""
         out = self(
             protein_ids=batch.protein,
             info_ids=batch.info,
@@ -108,27 +112,44 @@ class Cprt(LightningModule):  # type: ignore[misc]
             labels=batch.labels,
         )
         loss: Tensor = out["loss"]
-        self.log(f"loss/{mode}_loss", loss, prog_bar=True, on_step=True)
+        self.log("loss/train_loss", loss.item(), prog_bar=True)
+        with torch.no_grad():
+            self.train_perplexity.update(out["logits"], batch.labels)
+        if batch_idx % self.trainer.val_check_interval == 0 and batch_idx != 0:
+            self.log("metrics/train_perplexity", self.train_perplexity.compute(), on_step=True)
+            self.train_perplexity.reset()
         torch.cuda.empty_cache()
         return loss
 
-    def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
-        """Take a train step."""
-        for idx, layer in enumerate(self.cprt_llm.transformer.h):
-            self.log(
-                f"gates/layer_{idx}_attn_gate", layer.attn_gate.item(), on_step=True
-            )
-            self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item(), on_step=True)
-        return self.general_step(batch, "train")
-
     def validation_step(self, batch: CprtData, batch_idx: int) -> None:
         """Take a val step."""
-        self.general_step(batch, "val")
+        out = self(
+            protein_ids=batch.protein,
+            info_ids=batch.info,
+            attention_mask=batch.info_mask,
+            labels=batch.labels,
+        )
+        loss: Tensor = out["loss"]
+        self.log("loss/val_loss", loss.item(), prog_bar=True)
+        self.val_perplexity.update(out["logits"], batch.labels)
+        input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
+        generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
+        self.val_bleu_score.update(generated_text, input_text)
+        self.val_bert_scores.update(generated_text, input_text)
 
-    def configure_optimizers(self) -> Dict[str, Any]:
+    def on_validation_epoch_end(self) -> None:
+        self.log("metrics/val_perplexity", self.val_perplexity.compute())
+        self.val_perplexity.reset()
+        self.log("metrics/val_bleu", self.val_bleu_score.compute())
+        self.val_bleu_score.reset()
+        bert_score: Dict[str, Tensor] = self.val_bert_scores.compute()  # type: ignore[assignment]
+        self.log_dict({f"metrics/val_bert_{k}": v.mean() for k, v in bert_score.items()})
+        self.val_bert_scores.reset()
+        for idx, layer in enumerate(self.cprt_llm.transformer.h):
+            self.log(f"gates/layer_{idx}_attn_gate", layer.attn_gate.item())
+            self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item())
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4, weight_decay=1e-2)
-        return {
-            "optimizer": optimizer,
-            "monitor": "loss/train_loss",
-        }
+        return optimizer

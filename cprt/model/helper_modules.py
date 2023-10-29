@@ -12,27 +12,25 @@ class CrossAttentionDecoderLayer(nn.Module):
         self,
         protein_emb_dim: int,
         decoder: GPT2Block,
+        num_perceiver_heads: int,
         perceiver_latent_size: int = 100,
         num_perceiver_layers: int = 1,
     ) -> None:
         super().__init__()
         text_emb_dim = decoder.attn.c_attn.weight.size(0)
-        num_heads = decoder.attn.num_heads
         dropout = decoder.attn.attn_dropout.p
 
         self.perceiver = Perceiver(
             protein_emb_dim,
             perceiver_latent_size,
             text_emb_dim,
-            num_heads,
+            num_perceiver_heads,
             num_perceiver_layers,
             dropout,
         )
 
         self.text_layer_norm = nn.LayerNorm(text_emb_dim)
-        self.cross_attn = nn.MultiheadAttention(
-            text_emb_dim, num_heads, dropout=dropout, batch_first=True
-        )
+        self.cross_attn = nn.MultiheadAttention(text_emb_dim, decoder.attn.num_heads, dropout=dropout, batch_first=True)
 
         self.attn_gate = nn.Parameter(torch.tensor([0.0]))
         self.ffn = FeedForwardNetwork(text_emb_dim, dropout)
@@ -49,19 +47,14 @@ class CrossAttentionDecoderLayer(nn.Module):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-    ) -> Union[
-        Tuple[torch.Tensor],
-        Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]],
-    ]:
+    ) -> Union[Tuple[torch.Tensor], Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]]]:
 
         # TODO: implement this. Need to see how best to handle it for cross attention
         #   Note to self: In generation only the last token is passed to the model, so k, v must be cached
         assert use_cache is False, "use_cache not implemented yet."
 
         # TODO: implement this. Note that self.config.add_cross_attention must be set True for aggregation
-        assert (
-            output_attentions is False
-        ), "output_attentions for cross-attention not implemented yet."
+        assert output_attentions is False, "output_attentions for cross-attention not implemented yet."
 
         text = hidden_states
         protein = encoder_hidden_states
@@ -123,21 +116,19 @@ class Perceiver(nn.Module):
         :param dropout: dropout rate
         """
         super().__init__()
-        self.latents = nn.Parameter(torch.randn(latent_size, emb_dim))
+        self.latents = nn.Parameter(torch.randn(latent_size, input_dim))
         self.input_layer_norm = nn.LayerNorm(input_dim)
-        self.input_proj = nn.Linear(input_dim, emb_dim, bias=False)
-        self.layers = nn.ModuleList(
-            [PerceiverLayer(emb_dim, num_heads, dropout) for _ in range(num_layers)]
-        )
+        self.layers = nn.ModuleList([PerceiverLayer(input_dim, num_heads, dropout) for _ in range(num_layers)])
+        self.output_proj = nn.Linear(input_dim, emb_dim, bias=False)
         self.out_layer_norm = nn.LayerNorm(emb_dim)
 
     def forward(self, hidden_states: Tensor) -> Tensor:
         latents = self.latents.repeat(hidden_states.size(0), 1, 1)
         hidden_states = self.input_layer_norm(hidden_states)
-        hidden_states = self.input_proj(hidden_states)
         for layer in self.layers:
             latents = layer(latents, hidden_states)
-        out: Tensor = self.out_layer_norm(latents)
+        out = self.output_proj(latents)
+        out: Tensor = self.out_layer_norm(out)
         return out
 
 
@@ -149,18 +140,14 @@ class PerceiverLayer(nn.Module):
         super().__init__()
         self.latent_layer_norm = nn.LayerNorm(emb_dim)
         self.input_layer_norm = nn.LayerNorm(emb_dim)
-        self.attn = nn.MultiheadAttention(
-            emb_dim, num_heads, dropout=dropout, batch_first=True
-        )
-        self.ffn = FeedForwardNetwork(emb_dim, dropout)
+        self.attn = nn.MultiheadAttention(emb_dim, num_heads, dropout=dropout, batch_first=True)
+        self.ffn = FeedForwardNetwork(emb_dim, dropout, ff_expansion=0.5)
 
     def forward(self, latents: Tensor, hidden_states: Tensor) -> Tensor:
         """Cross-attend hidden_states and latents and self-attend latents."""
         residuals = latents
         latents = self.latent_layer_norm(latents)
-        hidden_latents = torch.cat(
-            (self.input_layer_norm(hidden_states), latents), dim=-2
-        )
+        hidden_latents = torch.cat((self.input_layer_norm(hidden_states), latents), dim=-2)
         latents, _ = self.attn(latents, hidden_latents, hidden_latents)
         out: Tensor = self.ffn(residuals + latents) + residuals
         return out
@@ -169,13 +156,13 @@ class PerceiverLayer(nn.Module):
 class FeedForwardNetwork(nn.Module):
     """General FFN module."""
 
-    def __init__(self, emb_dim: int, dropout: float, ff_expansion: int = 4) -> None:
+    def __init__(self, emb_dim: int, dropout: float, ff_expansion: float = 2.0) -> None:
         super().__init__()
         self.ffn = nn.Sequential(
             nn.LayerNorm(emb_dim),
-            nn.Linear(emb_dim, ff_expansion * emb_dim),
+            nn.Linear(emb_dim, int(ff_expansion * emb_dim)),
             nn.GELU(),
-            nn.Linear(ff_expansion * emb_dim, emb_dim),
+            nn.Linear(int(ff_expansion * emb_dim), emb_dim),
             nn.Dropout(dropout),
         )
 

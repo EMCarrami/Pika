@@ -1,6 +1,7 @@
 {
+  "seed": 7,
   "data": {
-    "data_dict_path": "uniref50_subsample_data.pkl",
+    "data_dict_path": "uniref50_gpt_data.pkl",
     "data_df_path": "uniref50_gzip_subsample.csv",
     "split_ratios": [0.8, 0.1, 0.1]
   },
@@ -18,8 +19,7 @@
   },
   "trainer": {
     "val_check_interval": 500,
-    "max_epochs": 1,
+    "max_epochs": 2,
     "devices": 1
-  },
-  "seed": 7
+  }
 }

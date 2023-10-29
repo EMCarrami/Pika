@@ -135,16 +135,17 @@ class Cprt(LightningModule):  # type: ignore[misc]
         input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
         self.val_bleu_score.update(generated_text, input_text)
-        self.val_bert_scores.update(generated_text, input_text)
+        # self.val_bert_scores.update(generated_text, input_text)
+        torch.cuda.empty_cache()
 
     def on_validation_epoch_end(self) -> None:
         self.log("metrics/val_perplexity", self.val_perplexity.compute())
         self.val_perplexity.reset()
         self.log("metrics/val_bleu", self.val_bleu_score.compute())
         self.val_bleu_score.reset()
-        bert_score: Dict[str, Tensor] = self.val_bert_scores.compute()  # type: ignore[assignment]
-        self.log_dict({f"metrics/val_bert_{k}": v.mean() for k, v in bert_score.items()})
-        self.val_bert_scores.reset()
+        # bert_score: Dict[str, Tensor] = self.val_bert_scores.compute()  # type: ignore[assignment]
+        # self.log_dict({f"metrics/val_bert_{k}": v.mean() for k, v in bert_score.items()})
+        # self.val_bert_scores.reset()
         for idx, layer in enumerate(self.cprt_llm.transformer.h):
             self.log(f"gates/layer_{idx}_attn_gate", layer.attn_gate.item())
             self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item())

@@ -104,7 +104,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         """Set up val loader."""
         return DataLoader(
             self.val_dataset,
-            batch_size=self.batch_size * 2,
+            batch_size=self.batch_size * 4,
             shuffle=False,
             collate_fn=self.collate_fn,
             num_workers=4,
@@ -115,7 +115,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         """Set up test loader."""
         return DataLoader(
             self.test_dataset,
-            batch_size=self.batch_size * 2,
+            batch_size=self.batch_size * 4,
             shuffle=False,
             collate_fn=self.collate_fn,
             num_workers=4,

@@ -140,7 +140,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self.val_perplexity.reset()
         rouge_scores: Dict[str, Tensor] = self.val_rouge_scores.compute()
         self.log_dict({f"metrics/val_{k}": v.mean() for k, v in rouge_scores.items()})
-        self.val_bert_scores.reset()
+        self.val_rouge_scores.reset()
         for idx, layer in enumerate(self.cprt_llm.transformer.h):
             self.log(f"gates/layer_{idx}_attn_gate", layer.attn_gate.item())
             self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item())

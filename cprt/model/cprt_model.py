@@ -7,6 +7,7 @@ from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+import wandb
 from cprt.data.cprt_datamodule import CprtData
 from cprt.model.helper_modules import CrossAttentionDecoderLayer, TruncatedESM2
 
@@ -35,11 +36,13 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self._add_cross_attention_to_llm()
         self._modify_generation_input_to_llm()
 
-        self.criterion = torch.nn.CrossEntropyLoss(ignore_index=-100)
-
         self.train_perplexity = Perplexity(ignore_index=-100)
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_rouge_scores = ROUGEScore()
+
+        self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
+            columns=["epoch", "input_text", "generated_text"]
+        )
 
     def _add_cross_attention_to_llm(self) -> None:
         """Add Cross-Attention layers to all decoder blocks."""
@@ -106,8 +109,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
 
     def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
         """Take a train step."""
-        out = self(protein_ids=batch.protein, info_ids=batch.info, attention_mask=batch.info_mask)
-        loss: Tensor = self.criterion(out["logits"].transpose(1, 2), batch.labels)
+        out = self(protein_ids=batch.protein, info_ids=batch.info, attention_mask=batch.info_mask, labels=batch.labels)
+        loss: Tensor = out["loss"]
         self.log("loss/train_loss", loss.item(), prog_bar=True)
         self.train_perplexity.update(out["logits"].detach(), batch.labels)
         if batch_idx % self.trainer.val_check_interval == 0 and batch_idx != 0:
@@ -124,14 +127,16 @@ class Cprt(LightningModule):  # type: ignore[misc]
             attention_mask=batch.info_mask,
             labels=batch.labels,
         )
-        loss: Tensor = self.criterion(out["logits"].transpose(1, 2), batch.labels)
+        loss: Tensor = out["loss"]
         self.log("loss/val_loss", loss.item(), prog_bar=True)
-        self.log("loss/val_gpt2_loss", out["loss"].item(), prog_bar=True)
         self.val_perplexity.update(out["logits"], batch.labels)
         input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
         self.val_rouge_scores.update(generated_text, input_text)
         if batch_idx == 0:
+            for i, g in zip(input_text, generated_text):
+                self.text_table.add_data(self.current_epoch, i, g)  # type: ignore[no-untyped-call]
+            wandb.log({"val_generation": self.text_table})
             print(generated_text)
         torch.cuda.empty_cache()
 

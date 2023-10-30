@@ -132,14 +132,14 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             truncation=True,
             max_length=1024,
         )
-        labels = tokenized_info["input_ids"][:, 1:].contiguous()
+        labels = tokenized_info["input_ids"].clone()
         labels[:, : self.placeholder_length] = -100
         for i, pad_idx in enumerate((1 - tokenized_info["attention_mask"]).sum(1)):
             if pad_idx > 0:
                 labels[i, -pad_idx:] = -100
         return CprtData(
-            info=tokenized_info["input_ids"][:, :-1].contiguous(),
-            info_mask=tokenized_info["attention_mask"][:, :-1].contiguous(),
+            info=tokenized_info["input_ids"],
+            info_mask=tokenized_info["attention_mask"],
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             labels=labels,
         )

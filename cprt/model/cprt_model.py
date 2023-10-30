@@ -35,6 +35,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self._add_cross_attention_to_llm()
         self._modify_generation_input_to_llm()
 
+        self.criterion = torch.nn.CrossEntropyLoss(ignore_index=-100)
+
         self.train_perplexity = Perplexity(ignore_index=-100)
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_bleu_score = BLEUScore()
@@ -105,16 +107,10 @@ class Cprt(LightningModule):  # type: ignore[misc]
 
     def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
         """Take a train step."""
-        out = self(
-            protein_ids=batch.protein,
-            info_ids=batch.info,
-            attention_mask=batch.info_mask,
-            labels=batch.labels,
-        )
-        loss: Tensor = out["loss"]
+        out = self(protein_ids=batch.protein, info_ids=batch.info, attention_mask=batch.info_mask)
+        loss: Tensor = self.criterion(out["logits"].transpose(1, 2), batch.labels)
         self.log("loss/train_loss", loss.item(), prog_bar=True)
-        with torch.no_grad():
-            self.train_perplexity.update(out["logits"], batch.labels)
+        self.train_perplexity.update(out["logits"].detach(), batch.labels)
         if batch_idx % self.trainer.val_check_interval == 0 and batch_idx != 0:
             self.log("metrics/train_perplexity", self.train_perplexity.compute(), on_step=True)
             self.train_perplexity.reset()
@@ -129,8 +125,9 @@ class Cprt(LightningModule):  # type: ignore[misc]
             attention_mask=batch.info_mask,
             labels=batch.labels,
         )
-        loss: Tensor = out["loss"]
+        loss: Tensor = self.criterion(out["logits"].transpose(1, 2), batch.labels)
         self.log("loss/val_loss", loss.item(), prog_bar=True)
+        self.log("loss/val_gpt2_loss", out["loss"].item(), prog_bar=True)
         self.val_perplexity.update(out["logits"], batch.labels)
         input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)

@@ -41,7 +41,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self.val_rouge_scores = ROUGEScore()
 
         self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["epoch", "input_text", "generated_text"]
+            columns=["global_step", "input_text", "generated_text"]
         )
 
     def _add_cross_attention_to_llm(self) -> None:
@@ -135,7 +135,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self.val_rouge_scores.update(generated_text, input_text)
         if batch_idx == 0:
             for i, g in zip(input_text, generated_text):
-                self.text_table.add_data(self.current_epoch, i, g)  # type: ignore[no-untyped-call]
+                self.text_table.add_data(self.trainer.global_step, i, g)  # type: ignore[no-untyped-call]
             wandb.log({"val_generation": self.text_table})
             print(generated_text)
         torch.cuda.empty_cache()

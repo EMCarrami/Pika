@@ -7,6 +7,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import torch
 from lightning.pytorch import seed_everything
+from tqdm import tqdm
 
 from cprt.data.cprt_datamodule import CprtDataModule
 from cprt.data.datamodule_factory import creat_datamodule
@@ -61,7 +62,7 @@ def localization_metrics(
     results = []
     for lc in locations:
         print(f"predicting {lc}, {len(seqs[lc])}")
-        for seq, expected in zip(seqs[lc], loc_info[lc]):
+        for seq, expected in tqdm(zip(seqs[lc], loc_info[lc]), total=len(seqs[lc])):
             with torch.no_grad():
                 preds = model.cprt_llm.generate(
                     tokenized_question["input_ids"].to(device),

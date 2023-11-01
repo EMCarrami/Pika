@@ -94,7 +94,7 @@ if __name__ == "__main__":
         default="What is the subcellular location of this protein?",
         help="Question prompt to use.",
     )
-    parser.add_argument("--checkpoint_path", type=int, help="path to model checkpoint")
+    parser.add_argument("--checkpoint_path", type=str, help="path to model checkpoint")
     args = parser.parse_args()
 
     localization_metrics(config_path=args.config_path, checkpoint_path=args.checkpoint_path, question=args.question)

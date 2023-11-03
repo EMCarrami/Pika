@@ -1,8 +1,10 @@
+import gc
 from typing import Any, Dict, Optional, Tuple, cast
 
 import torch
 from lightning import LightningModule
 from torch import FloatTensor, LongTensor, Tensor, nn
+from torchmetrics import MeanMetric
 from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
@@ -36,6 +38,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self._add_cross_attention_to_llm()
         self._modify_generation_input_to_llm()
 
+        self.train_mean_loss = MeanMetric()
         self.train_perplexity = Perplexity(ignore_index=-100)
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_rouge_scores = ROUGEScore()
@@ -109,13 +112,22 @@ class Cprt(LightningModule):  # type: ignore[misc]
 
     def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
         """Take a train step."""
+        self.log("monitor/max_protein_length", batch.protein.size(1), prog_bar=True)
+        self.log("monitor/max_info_length", batch.info.size(1), prog_bar=True)
+
         out = self(protein_ids=batch.protein, info_ids=batch.info, attention_mask=batch.info_mask, labels=batch.labels)
         loss: Tensor = out["loss"]
-        self.log("loss/train_loss", loss.item(), prog_bar=True)
+
+        self.train_mean_loss.update(loss.item())
+        if batch_idx % (self.trainer.val_check_interval // 10) == 0:
+            self.log("loss/train_loss", self.train_mean_loss.compute(), prog_bar=True)
+            self.train_mean_loss.reset()
+
         self.train_perplexity.update(out["logits"].detach()[:, :-1], batch.labels[:, 1:])
         if batch_idx % self.trainer.val_check_interval == 0 and batch_idx != 0:
-            self.log("metrics/train_perplexity", self.train_perplexity.compute(), on_step=True)
+            self.log("metrics/train_perplexity", self.train_perplexity.compute())
             self.train_perplexity.reset()
+
         torch.cuda.empty_cache()
         return loss
 
@@ -130,15 +142,27 @@ class Cprt(LightningModule):  # type: ignore[misc]
         loss: Tensor = out["loss"]
         self.log("loss/val_loss", loss.item(), prog_bar=True)
         self.val_perplexity.update(out["logits"][:, :-1], batch.labels[:, 1:])
+        # generation metrics
         input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
         self.val_rouge_scores.update(generated_text, input_text)
+        # log example outputs
         if batch_idx == 0:
-            for i, g in zip(input_text, generated_text):
-                self.text_table.add_data(self.trainer.global_step, i, g)  # type: ignore[no-untyped-call]
-            wandb.log({"val_generation": self.text_table})
-            print(generated_text)
+            for in_txt, protein in zip(input_text, batch.protein):
+                if "?" in in_txt:
+                    question = in_txt.split("?")[0]
+                    preds = self.cprt_llm.generate(
+                        self.text_tokenizer(question, return_tensors="pt")["input_ids"].to(self.device),
+                        encoder_hidden_states=self.esm(protein.unsqueeze(0)),
+                        use_cache=False,
+                        max_length=50,
+                    )
+                    response = self.text_tokenizer.decode(preds[0].cpu())
+                    self.text_table.add_data(  # type: ignore[no-untyped-call]
+                        self.trainer.global_step, in_txt, response
+                    )
         torch.cuda.empty_cache()
+        gc.collect()
 
     def on_validation_epoch_end(self) -> None:
         self.log("metrics/val_perplexity", self.val_perplexity.compute())
@@ -154,3 +178,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         """Configure optimizer."""
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4, weight_decay=1e-2)
         return optimizer
+
+    def log_wandb_table(self) -> None:
+        """Log wandb table of example outputs."""
+        wandb.log({"val_generation": self.text_table})

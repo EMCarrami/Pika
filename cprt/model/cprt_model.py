@@ -17,6 +17,8 @@ from cprt.model.helper_modules import CrossAttentionDecoderLayer, TruncatedESM2
 class Cprt(LightningModule):  # type: ignore[misc]
     """Class of Cprt Lightning model."""
 
+    last_val_batch: CprtData
+
     def __init__(
         self,
         language_model: str,
@@ -148,21 +150,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
         self.val_rouge_scores.update(generated_text, input_text)
-        # log example outputs
-        if batch_idx == 0:
-            for in_txt, protein in zip(input_text, batch.protein):
-                if "?" in in_txt:
-                    question = in_txt.split("?")[0]
-                    preds = self.cprt_llm.generate(
-                        self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
-                        encoder_hidden_states=self.esm(protein.unsqueeze(0)),
-                        use_cache=False,
-                        max_length=50,
-                    )
-                    response = self.text_tokenizer.decode(preds[0].cpu())
-                    self.text_table.add_data(  # type: ignore[no-untyped-call]
-                        self.trainer.global_step, in_txt, response
-                    )
+        self.last_val_batch = batch
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -175,6 +163,19 @@ class Cprt(LightningModule):  # type: ignore[misc]
         for idx, layer in enumerate(self.cprt_llm.transformer.h):
             self.log(f"gates/layer_{idx}_attn_gate", layer.attn_gate.item())
             self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item())
+        # log example outputs
+        input_text = self.text_tokenizer.batch_decode(self.last_val_batch.info, skip_special_tokens=True)
+        for in_txt, protein in zip(input_text, self.last_val_batch.protein):
+            if "?" in in_txt:
+                question = in_txt.split("?")[0]
+                preds = self.cprt_llm.generate(
+                    self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
+                    encoder_hidden_states=self.esm(protein.unsqueeze(0)),
+                    use_cache=False,
+                    max_length=50,
+                )
+                response = self.text_tokenizer.decode(preds[0].cpu())
+                self.text_table.add_data(self.trainer.global_step, in_txt, response)  # type: ignore[no-untyped-call]
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""

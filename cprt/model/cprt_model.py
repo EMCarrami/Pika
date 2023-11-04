@@ -2,6 +2,7 @@ import gc
 from typing import Any, Dict, Optional, Tuple, cast
 
 import torch
+import wandb
 from lightning import LightningModule
 from torch import FloatTensor, LongTensor, Tensor, nn
 from torchmetrics import MeanMetric
@@ -9,7 +10,6 @@ from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
-import wandb
 from cprt.data.cprt_datamodule import CprtData
 from cprt.model.helper_modules import CrossAttentionDecoderLayer, TruncatedESM2
 
@@ -19,8 +19,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
 
     def __init__(
         self,
-        language_model: str = "gpt2",
-        protein_model: str = "esm2_t6_8M_UR50D",
+        language_model: str,
+        protein_model: str,
         protein_layer_to_use: int = -1,
     ) -> None:
         """Initialize language and protein encoders."""
@@ -28,6 +28,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
 
         esm, _ = torch.hub.load("facebookresearch/esm:main", protein_model)  # type: ignore[no-untyped-call]
         self.esm = TruncatedESM2(esm, protein_layer_to_use)
+        self.esm.eval()
         for param in self.esm.parameters():
             param.requires_grad = False
 
@@ -92,7 +93,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
         return_dict: Optional[bool] = None,
     ) -> CausalLMOutputWithCrossAttentions:
 
-        protein_embeddings = self.esm(protein_ids)
+        with torch.no_grad():
+            protein_embeddings = self.esm(protein_ids)
 
         return self.cprt_llm(
             input_ids=info_ids,
@@ -152,7 +154,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
                 if "?" in in_txt:
                     question = in_txt.split("?")[0]
                     preds = self.cprt_llm.generate(
-                        self.text_tokenizer(question, return_tensors="pt")["input_ids"].to(self.device),
+                        self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
                         encoder_hidden_states=self.esm(protein.unsqueeze(0)),
                         use_cache=False,
                         max_length=50,

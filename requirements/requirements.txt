@@ -1,7 +1,6 @@
-gdown
 nltk
 pandas
-lightning~=2.0
-torch~=2.0
+lightning==2.0.0
+torch==2.0.0
 transformers
 wandb

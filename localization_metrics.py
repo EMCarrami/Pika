@@ -24,7 +24,7 @@ def load_from_checkpoint(config_path: str, checkpoint_path: str) -> Tuple[Cprt, 
     if "seed" in config:
         seed_everything(config["seed"])
     datamodule = creat_datamodule(**config["data"], datamodule_config=config["datamodule"], only_keep_questions=True)
-    model = Cprt.load_from_checkpoint(checkpoint_path, map_location=device)
+    model = Cprt.load_from_checkpoint(checkpoint_path, map_location=device, **config["model"])
     return model, datamodule
 
 

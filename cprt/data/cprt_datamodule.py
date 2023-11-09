@@ -55,7 +55,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         language_model: str = "gpt2",
         batch_size: int = 4,
         max_protein_length: int = 1500,
-        sequence_placeholder: str = "[protein sequence placeholder] ",
+        sequence_placeholder: str = "<protein sequence placeholder> ",
     ) -> None:
         """
         Load tokenziers and instantiate prepare datasets.

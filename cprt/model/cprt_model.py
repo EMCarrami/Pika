@@ -1,5 +1,5 @@
 import gc
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Dict, Optional, Tuple, cast
 
 import torch
 import wandb
@@ -7,11 +7,11 @@ from lightning import LightningModule
 from torch import FloatTensor, LongTensor, Tensor, nn
 from torchmetrics import MeanMetric
 from torchmetrics.text import Perplexity, ROUGEScore
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from cprt.data.cprt_datamodule import CprtData
-from cprt.model.helper_modules import CrossAttentionDecoderLayer, TruncatedESM2
+from cprt.model.helper_modules import CPrtLayer, GPT2CPrt, TruncatedESM2
 
 
 class Cprt(LightningModule):  # type: ignore[misc]
@@ -24,6 +24,9 @@ class Cprt(LightningModule):  # type: ignore[misc]
         language_model: str,
         protein_model: str,
         protein_layer_to_use: int = -1,
+        perceiver_latent_size: int = 100,
+        num_perceiver_layers: int = 1,
+        enable_gradient_checkpointing: bool = False,
     ) -> None:
         """Initialize language and protein encoders."""
         super().__init__()
@@ -34,12 +37,11 @@ class Cprt(LightningModule):  # type: ignore[misc]
         for param in self.esm.parameters():
             param.requires_grad = False
 
-        self.cprt_llm = GPT2LMHeadModel.from_pretrained(language_model)
+        self.cprt_llm = GPT2CPrt.from_pretrained(language_model)
         self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
         for param in self.cprt_llm.parameters():
             param.requires_grad = False
-        self._add_cross_attention_to_llm()
-        self._modify_generation_input_to_llm()
+        self._add_cross_attention_to_llm(perceiver_latent_size, num_perceiver_layers, enable_gradient_checkpointing)
 
         self.train_mean_loss = MeanMetric()
         self.train_perplexity = Perplexity(ignore_index=-100)
@@ -47,36 +49,29 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self.val_rouge_scores = ROUGEScore()
 
         self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["global_step", "input_text", "generated_text"]
+            columns=["global_step", "expected_answer", "generated_text"]
         )
 
-    def _add_cross_attention_to_llm(self) -> None:
+    def _add_cross_attention_to_llm(
+        self, perceiver_latent_size: int, num_perceiver_layers: int, enable_gradient_checkpointing: bool
+    ) -> None:
         """Add Cross-Attention layers to all decoder blocks."""
         protein_emb_size = cast(int, self.esm.embed_tokens.embedding_dim)
         protein_num_heads = self.esm.layers[0].self_attn.num_heads
         cross_attention_block = nn.ModuleList(
             [
-                CrossAttentionDecoderLayer(protein_emb_size, decoder, num_perceiver_heads=protein_num_heads)
+                CPrtLayer(
+                    protein_emb_size,
+                    decoder,
+                    protein_num_heads,
+                    perceiver_latent_size,
+                    num_perceiver_layers,
+                    enable_gradient_checkpointing,
+                )
                 for decoder in self.cprt_llm.transformer.h
             ]
         )
         self.cprt_llm.transformer.h = cross_attention_block
-
-    def _modify_generation_input_to_llm(self) -> None:
-        """
-        Update the cprt_llm prepare_inputs_for_generation method.
-
-        TODO: Add details and explain why
-        """
-        original_method = self.cprt_llm.prepare_inputs_for_generation
-
-        def updated_prepare_inputs_for_generation(*args: Any, **kwargs: Any) -> Dict[str, Any]:
-            """Add encoder_hidden_states to model_inputs of GPT2 generation."""
-            model_inputs: Dict[str, Any] = original_method(*args, **kwargs)
-            model_inputs["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
-            return model_inputs
-
-        self.cprt_llm.prepare_inputs_for_generation = updated_prepare_inputs_for_generation
 
     def forward(
         self,
@@ -127,7 +122,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
             self.log("loss/train_loss", self.train_mean_loss.compute(), prog_bar=True)
             self.train_mean_loss.reset()
 
-        self.train_perplexity.update(out["logits"].detach()[:, :-1], batch.labels[:, 1:])
+        self.train_perplexity.update(out["logits"].detach()[:, :-1].float(), batch.labels[:, 1:])
         if batch_idx % self.trainer.val_check_interval == 0 and batch_idx != 0:
             self.log("metrics/train_perplexity", self.train_perplexity.compute())
             self.train_perplexity.reset()
@@ -145,7 +140,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         )
         loss: Tensor = out["loss"]
         self.log("loss/val_loss", loss.item(), prog_bar=True)
-        self.val_perplexity.update(out["logits"][:, :-1], batch.labels[:, 1:])
+        self.val_perplexity.update(out["logits"][:, :-1].float(), batch.labels[:, 1:])
         # generation metrics
         input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)

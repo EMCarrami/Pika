@@ -4,7 +4,7 @@ import torch
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from cprt.model.helper_modules import (
-    CrossAttentionDecoderLayer,
+    CPrtLayer,
     FeedForwardNetwork,
     Perceiver,
     PerceiverLayer,
@@ -19,9 +19,7 @@ class TestTruncatedTransformer(TestCase):
         self.pretrained_model, self.alphabet = torch.hub.load(  # type: ignore[no-untyped-call]
             "facebookresearch/esm:main", "esm2_t6_8M_UR50D"
         )
-        self.protein_tokenizer = AutoTokenizer.from_pretrained(
-            "facebook/esm2_t6_8M_UR50D"
-        )
+        self.protein_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t6_8M_UR50D")
         self.layer_to_keep = 2
         self.truncated_model = TruncatedESM2(self.pretrained_model, self.layer_to_keep)
         self.input_ids = self.protein_tokenizer(
@@ -32,16 +30,14 @@ class TestTruncatedTransformer(TestCase):
         self.truncated_model.eval()
 
     def test_esm_compatibility(self) -> None:
-        self.assertDictEqual(
-            self.alphabet.to_dict(), self.protein_tokenizer.get_vocab()
-        )
+        self.assertDictEqual(self.alphabet.to_dict(), self.protein_tokenizer.get_vocab())
 
     def test_truncated_transformer(self) -> None:
         truncated_output = self.truncated_model(self.input_ids)
 
-        original_output = self.pretrained_model(
-            self.input_ids, repr_layers=[self.layer_to_keep]
-        )["representations"][self.layer_to_keep]
+        original_output = self.pretrained_model(self.input_ids, repr_layers=[self.layer_to_keep])["representations"][
+            self.layer_to_keep
+        ]
 
         self.assertEqual(truncated_output.shape, original_output.shape)
         self.assertTrue(torch.allclose(truncated_output, original_output))
@@ -94,8 +90,13 @@ class TestCrossAttentionDecoderLayer(TestCase):
     def setUp(self) -> None:
         llm = GPT2LMHeadModel.from_pretrained("gpt2")
         self.decoder = llm.transformer.h[0]
-        self.layer = CrossAttentionDecoderLayer(
-            protein_emb_dim=10, decoder=self.decoder, perceiver_latent_size=5
+        self.layer = CPrtLayer(
+            protein_emb_dim=10,
+            decoder=self.decoder,
+            num_perceiver_heads=1,
+            perceiver_latent_size=5,
+            num_perceiver_layers=1,
+            enable_gradient_checkpointing=False,
         )
         self.text_emb = torch.rand(2, 50, 768)
         self.protein_emb = torch.rand(2, 8, 10)
@@ -111,6 +112,4 @@ class TestCrossAttentionDecoderLayer(TestCase):
 
     def test_input_assertion(self) -> None:
         with self.assertRaises(AssertionError):
-            self.layer(
-                self.text_emb, encoder_hidden_states=None, encoder_attention_mask=None
-            )
+            self.layer(self.text_emb, encoder_hidden_states=None, encoder_attention_mask=None)

@@ -156,8 +156,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self.log_dict({f"metrics/val_{k}": v.mean() for k, v in rouge_scores.items()})
         self.val_rouge_scores.reset()
         for idx, layer in enumerate(self.cprt_llm.transformer.h):
-            self.log(f"gates/layer_{idx}_attn_gate", layer.attn_gate.item())
-            self.log(f"gates/layer_{idx}_ff_gate", layer.ff_gate.item())
+            self.log(f"gates/layer_{idx}_attn_gate", layer.cross_attn.attn_gate.item())
+            self.log(f"gates/layer_{idx}_ff_gate", layer.cross_attn.ff_gate.item())
         # log example outputs
         input_text = self.text_tokenizer.batch_decode(self.last_val_batch.info, skip_special_tokens=True)
         for in_txt, protein in zip(input_text, self.last_val_batch.protein):

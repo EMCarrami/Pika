@@ -48,6 +48,7 @@ class CPrtLayer(nn.Module):
         attention_mask: Optional[torch.FloatTensor] = None,
         head_mask: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
     ) -> Union[Tuple[torch.Tensor], Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]]]:
@@ -73,7 +74,7 @@ class CPrtLayer(nn.Module):
             attention_mask=attention_mask,
             head_mask=head_mask,
             encoder_hidden_states=None,
-            encoder_attention_mask=None,
+            encoder_attention_mask=encoder_attention_mask,
             use_cache=use_cache,
             output_attentions=output_attentions,
         )

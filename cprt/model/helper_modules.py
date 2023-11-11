@@ -10,15 +10,20 @@ from transformers.models.gpt2.modeling_gpt2 import GPT2Block
 class GPT2CPrt(GPT2LMHeadModel):  # type: ignore[misc]
     """Modified generation config of GPT2 to allow for cross attention in generation."""
 
-    def prepare_inputs_for_generation(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def prepare_inputs_for_generation(
+        self, *args: Any, inputs_embeds: Tensor | None = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Add encoder_hidden_states to model_inputs of GPT2 generation for CPrt."""
-        model_inputs: Dict[str, Any] = super(GPT2CPrt, self).prepare_inputs_for_generation(*args, **kwargs)
-        model_inputs["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
+        model_inputs: Dict[str, Any] = super(GPT2CPrt, self).prepare_inputs_for_generation(
+            *args, inputs_embeds=inputs_embeds, **kwargs
+        )
+        if kwargs.get("encoder_hidden_states", None) is not None:
+            model_inputs["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
         return model_inputs
 
 
-class CPrtLayer(nn.Module):
-    """Perceiver and Cross attention decoder layer to inject into a default GPT decoder."""
+class CPrtCrossAttentionLayer(nn.Module):
+    """Perceiver and Cross attention decoder layer to inject into a GPT2 decoder."""
 
     def __init__(
         self,

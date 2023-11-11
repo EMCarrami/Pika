@@ -7,9 +7,11 @@
   },
   "datamodule": {
     "batch_size": 4,
-    "max_protein_length": 750
+    "max_protein_length": 750,
+    "sequence_placeholder": "<protein sequence placeholder> "
   },
   "model": {
+    "multimodal_strategy": "cross-attention",
     "language_model": "gpt2-xl",
     "protein_model": "esm2_t12_35M_UR50D",
     "protein_layer_to_use": -1,

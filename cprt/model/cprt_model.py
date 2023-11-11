@@ -1,34 +1,26 @@
 import gc
-from typing import Dict, List, Optional, Tuple, cast
+from abc import ABC, abstractmethod
+from collections import defaultdict
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import wandb
 from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
-from torch import FloatTensor, LongTensor, Tensor, nn
-from torchmetrics import MeanMetric
+from torch import FloatTensor, LongTensor, Tensor
 from torchmetrics.text import Perplexity, ROUGEScore
+from tqdm import tqdm
 from transformers import GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from cprt.data.cprt_datamodule import CprtData
-from cprt.model.helper_modules import CPrtLayer, GPT2CPrt, TruncatedESM2
+from cprt.model.helper_modules import GPT2CPrt, TruncatedESM2
 
 
-class Cprt(LightningModule):  # type: ignore[misc]
-    """Class of Cprt Lightning model."""
+class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
+    """Abstract class of Cprt Lightning model."""
 
-    last_val_batch: CprtData
-
-    def __init__(
-        self,
-        language_model: str,
-        protein_model: str,
-        protein_layer_to_use: int = -1,
-        perceiver_latent_size: int = 100,
-        num_perceiver_layers: int = 1,
-        enable_gradient_checkpointing: bool = False,
-    ) -> None:
+    def __init__(self, language_model: str, protein_model: str, protein_layer_to_use: int = -1) -> None:
         """Initialize language and protein encoders."""
         super().__init__()
 
@@ -42,9 +34,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
         self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
         for param in self.cprt_llm.parameters():
             param.requires_grad = False
-        self._add_cross_attention_to_llm(perceiver_latent_size, num_perceiver_layers, enable_gradient_checkpointing)
 
-        self.train_mean_loss = MeanMetric()
         self.train_perplexity = Perplexity(ignore_index=-100)
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_rouge_scores = ROUGEScore()
@@ -53,27 +43,7 @@ class Cprt(LightningModule):  # type: ignore[misc]
             columns=["global_step", "expected_answer", "generated_text"]
         )
 
-    def _add_cross_attention_to_llm(
-        self, perceiver_latent_size: int, num_perceiver_layers: int, enable_gradient_checkpointing: bool
-    ) -> None:
-        """Add Cross-Attention layers to all decoder blocks."""
-        protein_emb_size = cast(int, self.esm.embed_tokens.embedding_dim)
-        protein_num_heads = self.esm.layers[0].self_attn.num_heads
-        cross_attention_block = nn.ModuleList(
-            [
-                CPrtLayer(
-                    protein_emb_size,
-                    decoder,
-                    protein_num_heads,
-                    perceiver_latent_size,
-                    num_perceiver_layers,
-                    enable_gradient_checkpointing,
-                )
-                for decoder in self.cprt_llm.transformer.h
-            ]
-        )
-        self.cprt_llm.transformer.h = cross_attention_block
-
+    @abstractmethod
     def forward(
         self,
         protein_ids: Tensor,
@@ -90,25 +60,8 @@ class Cprt(LightningModule):  # type: ignore[misc]
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> CausalLMOutputWithCrossAttentions:
-
-        with torch.no_grad():
-            protein_embeddings = self.esm(protein_ids)
-
-        return self.cprt_llm(
-            input_ids=info_ids,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
-            encoder_hidden_states=protein_embeddings,
-            encoder_attention_mask=encoder_attention_mask,
-            labels=labels,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+        """Implement GPT2 compatible forward."""
+        raise NotImplementedError("Implement GPT2 compatible forward.")
 
     def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
         """Take a train step."""
@@ -149,10 +102,9 @@ class Cprt(LightningModule):  # type: ignore[misc]
         for in_txt, protein in zip(input_text, protein):
             if "?" in in_txt:
                 question = in_txt.split("?")[0]
-                preds = self.cprt_llm.generate(
-                    self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
-                    encoder_hidden_states=self.esm(protein.unsqueeze(0)),
-                    use_cache=False,
+                preds = self.generate(
+                    protein_ids=protein.unsqueeze(0),
+                    info_ids=self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
                     max_length=50,
                 )
                 response = self.text_tokenizer.decode(preds[0].cpu())
@@ -172,11 +124,55 @@ class Cprt(LightningModule):  # type: ignore[misc]
     def on_fit_end(self) -> None:
         """Log generation examples table."""
         self.log_wandb_table()
+        self.log_biochem_metrics()
 
     @rank_zero_only  # type: ignore[misc]
     def log_wandb_table(self) -> None:
         """Log wandb table of example outputs."""
         wandb.log({"val_generation": self.text_table})
+
+    @rank_zero_only  # type: ignore[misc]
+    def log_biochem_metrics(self) -> None:
+        """Compute and log biochemical metrics on validation set."""
+        best_model_path = self.trainer.checkpoint_callback.best_model_path
+        self.load_state_dict(torch.load(best_model_path)["state_dict"])
+
+        locations = ["membrane", "nucleus", "mitochondri"]
+        question = "What is the subcellular location of this protein?"
+        loader = self.trainer.val_dataloaders
+
+        seqs, loc_info = defaultdict(list), defaultdict(list)
+        for batch in loader:
+            for info, seq in zip(batch.info, batch.protein):
+                info_text = self.text_tokenizer.decode(info, skip_special_tokens=True)
+                if "where" in info_text.split("?")[0].lower() or "location" in info_text.split("?")[0].lower():
+                    for lc in locations:
+                        if lc in info_text:
+                            seqs[lc].append(seq)
+                            loc_info[lc].append(info_text)
+
+        tokenized_question = self.text_tokenizer(
+            [f"{self.trainer.datamodule.sequence_placeholder} {question}"], return_tensors="pt"
+        )
+        for lc in locations:
+            print(f"predicting {lc}, {len(seqs[lc])}")
+            correct = 0
+            for seq, expected in tqdm(zip(seqs[lc], loc_info[lc]), total=len(seqs[lc])):
+                with torch.no_grad():
+                    preds = self.generate(
+                        protein_ids=seq.unsqueeze(0),
+                        info_ids=tokenized_question["input_ids"].to(self.device),
+                        max_length=50,
+                    )
+                response = self.text_tokenizer.decode(preds[0].cpu())
+                if lc in response:
+                    correct += 1
+            self.log(f"biochem/{lc}_accuracy", correct / len(seqs[lc]))
+
+    @abstractmethod
+    def generate(self, protein_ids: Tensor, info_ids: Tensor, max_length: int = 50) -> Tensor:
+        """Implement generate method."""
+        raise NotImplementedError("generate method for the model not implemented.")
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""

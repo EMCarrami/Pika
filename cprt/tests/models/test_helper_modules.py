@@ -4,7 +4,7 @@ import torch
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from cprt.model.helper_modules import (
-    CPrtLayer,
+    CPrtCrossAttentionLayer,
     FeedForwardNetwork,
     Perceiver,
     PerceiverLayer,
@@ -90,7 +90,7 @@ class TestCrossAttentionDecoderLayer(TestCase):
     def setUp(self) -> None:
         llm = GPT2LMHeadModel.from_pretrained("gpt2")
         self.decoder = llm.transformer.h[0]
-        self.layer = CPrtLayer(
+        self.layer = CPrtCrossAttentionLayer(
             protein_emb_dim=10,
             decoder=self.decoder,
             num_perceiver_heads=1,

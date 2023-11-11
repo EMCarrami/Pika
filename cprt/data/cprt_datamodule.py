@@ -53,7 +53,8 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         metadata: pd.DataFrame,
         esm_model: str = "esm2_t6_8M_UR50D",
         language_model: str = "gpt2",
-        batch_size: int = 4,
+        train_batch_size: int = 4,
+        eval_batch_size: int | None = None,
         max_protein_length: int = 1500,
         sequence_placeholder: str = "<protein sequence placeholder> ",
     ) -> None:
@@ -67,13 +68,15 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
                             - split: name of the split the uniprot_id belongs
         :param esm_model: esm model to use for tokenizer
         :param language_model: language model to use for tokenizer
-        :param batch_size: train, val and test main batch size
+        :param train_batch_size: train batch size
+        :param eval_batch_size: size of val/test batch size. If unspecified will be 4 * train_batch_size
         :param max_protein_length: mex length of protein allowed for tokenizer to throw a warning
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
                                         will be ignored in loss computation by setting label to -100
         """
         super().__init__()
-        self.batch_size = batch_size
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
 
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{esm_model}")
         self.protein_tokenizer.model_max_length = max_protein_length
@@ -93,7 +96,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         """Set up train loader."""
         return DataLoader(
             self.train_dataset,
-            batch_size=self.batch_size,
+            batch_size=self.train_batch_size,
             shuffle=True,
             collate_fn=self.collate_fn,
             num_workers=4,
@@ -104,7 +107,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         """Set up val loader."""
         return DataLoader(
             self.val_dataset,
-            batch_size=self.batch_size * 4,
+            batch_size=self.eval_batch_size,
             shuffle=False,
             collate_fn=self.collate_fn,
             num_workers=4,
@@ -115,7 +118,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         """Set up test loader."""
         return DataLoader(
             self.test_dataset,
-            batch_size=self.batch_size * 4,
+            batch_size=self.eval_batch_size,
             shuffle=False,
             collate_fn=self.collate_fn,
             num_workers=4,

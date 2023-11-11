@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict
 
 import wandb
-from lightning import Trainer
+from lightning import Callback, Trainer
 from lightning.pytorch import seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
@@ -10,9 +10,18 @@ from transformers import logging as transformers_logging
 
 from cprt.data.datamodule_factory import creat_datamodule
 from cprt.model import CPRT_MODELS
+from cprt.model.cprt_model import BaseCPrtModel
 from cprt.utils import ROOT
 
 transformers_logging.set_verbosity_error()
+
+
+class ExceptionHandlerCallback(Callback):  # type: ignore[misc]
+    """Callback to handle exceptions."""
+
+    def on_exception(self, trainer: Trainer, model: BaseCPrtModel, exception: Exception) -> None:
+        """Run final logs."""
+        model.on_train_end()
 
 
 def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
@@ -37,13 +46,11 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     if log_to_wandb:
         config["wandb"]["group"] = group_name
         wandb_logger = WandbLogger(**config["wandb"])
-        trainer = Trainer(logger=wandb_logger, callbacks=checkpoint_callback, **config["trainer"])
+        trainer = Trainer(
+            logger=wandb_logger, callbacks=[checkpoint_callback, ExceptionHandlerCallback()], **config["trainer"]
+        )
         trainer.logger.log_hyperparams(config)
-        try:
-            trainer.fit(model, datamodule)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            model.on_fit_end()
+        trainer.fit(model, datamodule)
         wandb.finish()
     else:
         trainer = Trainer(callbacks=checkpoint_callback, **config["trainer"])

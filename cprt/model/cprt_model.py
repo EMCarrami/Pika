@@ -118,7 +118,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         self.log_dict({f"metrics/val_{k}": v.mean() for k, v in rouge_scores.items()})
         self.val_rouge_scores.reset()
 
-    def on_fit_end(self) -> None:
+    def on_train_end(self) -> None:
         """Log generation examples table."""
         self.log_wandb_table()
         self.log_biochem_metrics()
@@ -131,8 +131,10 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
     @rank_zero_only  # type: ignore[misc]
     def log_biochem_metrics(self) -> None:
         """Compute and log biochemical metrics on validation set."""
-        best_model_path = self.trainer.checkpoint_callback.best_model_path
-        self.load_state_dict(torch.load(best_model_path)["state_dict"])
+        if hasattr(self.trainer.checkpoint_callback, "best_model_path"):
+            best_model_path = self.trainer.checkpoint_callback.best_model_path
+            if best_model_path is not None:
+                self.load_state_dict(torch.load(best_model_path)["state_dict"])
 
         locations = ["membrane", "nucleus", "mitochondri"]
         question = "What is the subcellular location of this protein?"
@@ -157,14 +159,14 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
             for seq, expected in tqdm(zip(seqs[lc], loc_info[lc]), total=len(seqs[lc])):
                 with torch.no_grad():
                     preds = self.generate(
-                        protein_ids=seq.unsqueeze(0),
+                        protein_ids=seq.unsqueeze(0).to(self.device),
                         info_ids=tokenized_question["input_ids"].to(self.device),
                         max_length=50,
                     )
                 response = self.text_tokenizer.decode(preds[0].cpu())
                 if lc in response:
                     correct += 1
-            self.log(f"biochem/{lc}_accuracy", correct / len(seqs[lc]))
+            wandb.log({f"biochem/{lc}_accuracy": correct / len(seqs[lc])})
 
     @abstractmethod
     def generate(self, protein_ids: Tensor, info_ids: Tensor, max_length: int = 50) -> Tensor:
@@ -175,7 +177,3 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         """Configure optimizer."""
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4, weight_decay=1e-2)
         return optimizer
-
-    def on_keyboard_interrupt(self) -> None:
-        print("Keyboard interrupt detected. Gracefully shutting down...")
-        self.on_fit_end()

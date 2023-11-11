@@ -6,7 +6,8 @@
     "split_ratios": [0.88, 0.02, 0.1]
   },
   "datamodule": {
-    "batch_size": 4,
+    "train_batch_size": 4,
+    "eval_batch_size": 16,
     "max_protein_length": 750,
     "sequence_placeholder": "<protein sequence placeholder> "
   },

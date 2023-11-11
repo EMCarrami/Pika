@@ -22,29 +22,29 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
 
     datamodule = creat_datamodule(**config["data"], datamodule_config=config["datamodule"], only_keep_questions=True)
     model = Cprt(**config["model"])
+
+    group_name = f"{config['model']['protein_model']}_{config['model']['language_model']}"
     checkpoint_callback = ModelCheckpoint(
         monitor="loss/val_loss",
         mode="min",
         save_top_k=1,
-        dirpath=f"{ROOT}/model_checkpoints/{config['model']['protein_model']}_{config['model']['language_model']}",
+        dirpath=f"{ROOT}/model_checkpoints/{group_name}_{config.get('seed', 'random')}",
         verbose=True,
     )
 
-    config["trainer"]["log_every_n_steps"] = 1
     if log_to_wandb:
-        wandb.init(**config["wandb"])
-        trainer = Trainer(logger=WandbLogger(), callbacks=[checkpoint_callback], **config["trainer"])
+        config["wandb"]["group"] = group_name
+        wandb_logger = WandbLogger(**config["wandb"])
+        trainer = Trainer(logger=wandb_logger, callbacks=checkpoint_callback, **config["trainer"])
         trainer.logger.log_hyperparams(config)
         try:
             trainer.fit(model, datamodule)
         except Exception as e:
             print(f"An error occurred: {e}")
             model.log_wandb_table()
-        finally:
-            model.log_wandb_table()
         wandb.finish()
     else:
-        trainer = Trainer(callbacks=[checkpoint_callback], **config["trainer"])
+        trainer = Trainer(callbacks=checkpoint_callback, **config["trainer"])
         trainer.fit(model, datamodule)
 
 

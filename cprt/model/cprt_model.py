@@ -93,7 +93,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
         self.val_rouge_scores.update(generated_text, input_text)
         if batch_idx == 0:
-            self.log_example_outputs(input_text, batch.protein)
+            self.log_example_outputs(input_text[:4], batch.protein[:4])
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -117,9 +117,6 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         rouge_scores: Dict[str, Tensor] = self.val_rouge_scores.compute()
         self.log_dict({f"metrics/val_{k}": v.mean() for k, v in rouge_scores.items()})
         self.val_rouge_scores.reset()
-        for idx, layer in enumerate(self.cprt_llm.transformer.h):
-            self.log(f"gates/layer_{idx}_attn_gate", layer.cross_attn.attn_gate.item())
-            self.log(f"gates/layer_{idx}_ff_gate", layer.cross_attn.ff_gate.item())
 
     def on_fit_end(self) -> None:
         """Log generation examples table."""
@@ -178,3 +175,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         """Configure optimizer."""
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4, weight_decay=1e-2)
         return optimizer
+
+    def on_keyboard_interrupt(self) -> None:
+        print("Keyboard interrupt detected. Gracefully shutting down...")
+        self.on_fit_end()

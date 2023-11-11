@@ -29,7 +29,7 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     if "seed" in config:
         seed_everything(config["seed"])
 
-    datamodule = creat_datamodule(**config["data"], datamodule_config=config["datamodule"], only_keep_questions=True)
+    datamodule = creat_datamodule(**config["data"], datamodule_config=config["datamodule"])
 
     multimodal_strategy = config["model"].pop("multimodal_strategy")
     model = CPRT_MODELS[multimodal_strategy](**config["model"])

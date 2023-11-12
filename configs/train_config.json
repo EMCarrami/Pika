@@ -16,7 +16,7 @@
     "language_model": "gpt2-xl",
     "protein_model": "esm2_t12_35M_UR50D",
     "protein_layer_to_use": -1,
-    "perceiver_latent_size": 20,
+    "perceiver_latent_size": 100,
     "num_perceiver_layers": 1,
     "enable_gradient_checkpointing": false
   },

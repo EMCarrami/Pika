@@ -133,7 +133,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             padding=True,
             return_tensors="pt",
             truncation=True,
-            max_length=1024,
+            max_length=400,
         )
         labels = tokenized_info["input_ids"].clone()
         labels[:, : self.placeholder_length] = -100

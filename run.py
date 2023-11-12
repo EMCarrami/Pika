@@ -1,3 +1,4 @@
+import argparse
 import json
 from typing import Any, Dict
 
@@ -58,6 +59,10 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--log_to_wandb", type=bool, default=False)
+    args = parser.parse_args()
+
     with open(f"{ROOT}/configs/train_config.json", "r") as f:
         config: Dict[str, Any] = json.load(f)
-    train_cprt(config, log_to_wandb=False)
+    train_cprt(config, log_to_wandb=args.log_to_wandb)

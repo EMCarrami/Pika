@@ -12,7 +12,9 @@ def creat_datamodule(
 ) -> CprtDataModule:
     """Create the CprtDatamodule."""
     data_dict = load_data_from_path(data_dict_path)
-    data_dict = {k: {"sequence": v["sequence"], "info": v["info"]} for k, v in data_dict.items()}
+    data_dict = {
+        k: {"sequence": v["sequence"], "info": [i for i in v["info"] if "?" in i]} for k, v in data_dict.items()
+    }
     data_df = load_data_from_path(data_df_path)
     data_df = data_df[data_df["uniprot_id"].isin(data_dict)]
     # TODO: to be removed after data update

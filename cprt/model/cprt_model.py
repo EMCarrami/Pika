@@ -93,7 +93,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
         self.val_rouge_scores.update(generated_text, input_text)
         if batch_idx == 0:
-            self.log_example_outputs(input_text[:4], batch.protein[:4])
+            self.log_example_outputs(input_text[-4:], batch.protein[-4:])
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -120,6 +120,8 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
 
     def on_train_end(self) -> None:
         """Log generation examples table."""
+        torch.cuda.empty_cache()
+        gc.collect()
         self.log_wandb_table()
         self.log_biochem_metrics()
 

@@ -1,7 +1,7 @@
 {
   "seed": 7,
   "data": {
-    "data_dict_path": "uniref50_gptv2_data.pkl",
+    "data_dict_path": "uniref50_gpt_data.pkl",
     "data_df_path": "uniref50_gzip_subsample.csv",
     "split_ratios": [0.88, 0.02, 0.1]
   },
@@ -25,7 +25,7 @@
   },
   "trainer": {
     "precision": "16-mixed",
-    "val_check_interval": 500,
+    "val_check_interval": 1000,
     "max_epochs": 1,
     "devices": 1
   }

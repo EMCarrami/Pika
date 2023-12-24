@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 import torch
 from torch import FloatTensor, LongTensor, Tensor, nn
@@ -82,19 +82,29 @@ class SoftPromptCPrt(BaseCPrtModel):
         return out
 
     @torch.no_grad()
-    def generate(self, protein_ids: Tensor, info_ids: Tensor, max_length: int = 50) -> Tensor:
+    def generate(
+        self, protein_ids: Tensor, info_ids: Tensor, generation_length: int = 20, keep_prompt: bool = False
+    ) -> List[str]:
         """Generate using input_embeds and input ids with use_cache==True."""
         self.eval()
         info_embeddings = self.cprt_llm.transformer.wte(info_ids)
         protein_embeddings = self.esm(protein_ids)
         protein_embeddings = self.protein_layer_norm(protein_embeddings)
         protein_latents = self.perceiver(protein_embeddings)
-        preds: Tensor = self.cprt_llm.generate(
-            input_ids=torch.concat(
-                [info_ids.new_full(size=(protein_latents.shape[:2]), fill_value=0), info_ids], dim=1
-            ),
-            inputs_embeds=torch.concat([protein_latents, info_embeddings], dim=1),
-            use_cache=True,
-            max_length=max_length,
-        )
-        return preds
+        out = []
+        for q_ids, q_embs, protein in zip(info_ids, info_embeddings, protein_latents):
+            mask = q_ids == self.text_tokenizer.eos_token_id
+            prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(q_ids))
+            pos_offset = 0 if keep_prompt else prompt_len
+            preds = self.cprt_llm.generate(
+                input_ids=torch.concat(
+                    [q_ids.new_full(size=(protein.shape[:1]), fill_value=0), q_ids[:prompt_len]]
+                ).unsqueeze(0),
+                inputs_embeds=torch.concat([protein, q_embs], dim=0).unsqueeze(0),
+                use_cache=True,
+                max_length=generation_length + prompt_len + len(protein),
+            )
+            out.append(
+                self.text_tokenizer.decode(preds[0, len(protein) + pos_offset :].cpu(), skip_special_tokens=True)
+            )
+        return out

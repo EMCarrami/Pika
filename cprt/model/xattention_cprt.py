@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 import torch
 from torch import FloatTensor, LongTensor, Tensor, nn
@@ -77,11 +77,22 @@ class CrossAttentionCPrt(BaseCPrtModel):
         )
 
     @torch.no_grad()
-    def generate(self, protein_ids: Tensor, info_ids: Tensor, max_length: int = 50) -> Tensor:
+    def generate(
+        self, protein_ids: Tensor, info_ids: Tensor, generation_length: int = 20, keep_prompt: bool = False
+    ) -> List[str]:
         """Generate using input_ids and protein_embeddings as encoder_hidden_states."""
         self.eval()
         protein_embeddings = self.esm(protein_ids)
-        preds: Tensor = self.cprt_llm.generate(
-            input_ids=info_ids, encoder_hidden_states=protein_embeddings, use_cache=False, max_length=max_length
-        )
-        return preds
+        out = []
+        for question, protein in zip(info_ids, protein_embeddings):
+            mask = question == self.text_tokenizer.eos_token_id
+            prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(question))
+            pos_offset = 0 if keep_prompt else prompt_len
+            preds = self.cprt_llm.generate(
+                input_ids=question[:prompt_len].unsqueeze(0),
+                encoder_hidden_states=protein.unsqueeze(0),
+                use_cache=False,
+                max_length=generation_length + prompt_len,
+            )
+            out.append(self.text_tokenizer.decode(preds[0, pos_offset:].cpu(), skip_special_tokens=True))
+        return out

@@ -10,6 +10,7 @@ from cprt.data.cprt_torch_datasets import CprtDataset, CprtMetricDataset
 from cprt.data.data_utils import load_data_from_path, random_split_df
 
 CprtData = namedtuple("CprtData", ["info", "info_mask", "protein", "labels"])
+CprtMetricData = namedtuple("CprtMetricData", ["info", "info_mask", "protein", "metric_name", "expected_value"])
 
 
 class CprtDataModule(LightningDataModule):  # type: ignore[misc]
@@ -143,10 +144,10 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             labels=labels,
         )
 
-    def metric_collate_fn(self, batch: List[Tuple[str, str, str, str | int]]) -> CprtData:
+    def metric_collate_fn(self, batch: List[Tuple[str, str, str, str | int]]) -> CprtMetricData:
         """Collate, pad and tokenize protein and metric information."""
-        protein_sequences, questions, metric_list, labels = zip(*batch)
-        questions = [f"{self.sequence_placeholder} {i}{self.text_tokenizer.eos_token}" for i in questions]
+        protein_sequences, questions, metric_list, values = zip(*batch)
+        questions = [f"{self.sequence_placeholder} {i}" for i in questions]
         tokenized_questions = self.text_tokenizer(
             questions,
             padding=True,
@@ -154,9 +155,10 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             truncation=True,
             max_length=self.max_text_length,
         )
-        return CprtData(
+        return CprtMetricData(
             info=tokenized_questions["input_ids"],
             info_mask=tokenized_questions["attention_mask"],
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
-            labels=tuple(zip(metric_list, labels)),
+            metric_name=metric_list,
+            expected_value=values,
         )

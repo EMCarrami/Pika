@@ -1,6 +1,5 @@
 import gc
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -9,11 +8,11 @@ from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
 from torch import FloatTensor, LongTensor, Tensor
 from torchmetrics.text import Perplexity, ROUGEScore
-from tqdm import tqdm
 from transformers import GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
-from cprt.data.cprt_datamodule import CprtData
+from cprt.data.cprt_datamodule import CprtData, CprtMetricData
+from cprt.metrics.biochem_metrics import BiochemMetrics
 from cprt.model.helper_modules import GPT2CPrt, TruncatedESM2
 
 
@@ -38,6 +37,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         self.train_perplexity = Perplexity(ignore_index=-100)
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_rouge_scores = ROUGEScore()
+        self.val_biochem = BiochemMetrics()
 
         self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
             columns=["global_step", "expected_answer", "generated_text"]
@@ -77,9 +77,10 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         torch.cuda.empty_cache()
         return loss
 
-    def validation_step(self, batch: CprtData, batch_idx: int, dataloader_idx: int = 0) -> None:
+    def validation_step(self, batch: CprtData | CprtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Take a val step."""
         if dataloader_idx == 0:
+            assert isinstance(batch, CprtData)
             out = self(
                 protein_ids=batch.protein,
                 info_ids=batch.info,
@@ -98,9 +99,9 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
             if batch_idx == 0:
                 self.log_example_outputs(input_text[-4:], batch.protein[-4:])
         else:
-            print(batch)
-            print(batch.info.device)
-            exit()
+            assert isinstance(batch, CprtMetricData)
+            out = self.generate(protein_ids=batch.protein, info_ids=batch.info, generation_length=20, keep_prompt=False)
+            self.val_biochem.update(out, batch.expected_value, batch.metric_name)
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -109,12 +110,12 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         for in_txt, protein in zip(input_text, protein):
             if "?" in in_txt:
                 question = in_txt.split("?")[0]
-                preds = self.generate(
+                response = self.generate(
                     protein_ids=protein.unsqueeze(0),
                     info_ids=self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
-                    max_length=50,
+                    generation_length=25,
+                    keep_prompt=True,
                 )
-                response = self.text_tokenizer.decode(preds[0].cpu())
                 self.text_table.add_data(self.trainer.global_step, in_txt, response)  # type: ignore[no-untyped-call]
 
     def on_validation_epoch_end(self) -> None:
@@ -124,62 +125,64 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         rouge_scores: Dict[str, Tensor] = self.val_rouge_scores.compute()
         self.log_dict({f"metrics/val_{k}": v.mean() for k, v in rouge_scores.items()})
         self.val_rouge_scores.reset()
+        biochem_scores = self.val_biochem.compute()
+        self.log_dict({f"biochem/val_{k}": v for k, v in biochem_scores.items()})
+        self.val_biochem.reset()
 
     def on_train_end(self) -> None:
         """Log generation examples table."""
-        torch.cuda.empty_cache()
-        gc.collect()
         self.log_wandb_table()
-        self.log_biochem_metrics()
 
     @rank_zero_only  # type: ignore[misc]
     def log_wandb_table(self) -> None:
         """Log wandb table of example outputs."""
         wandb.log({"val_generation": self.text_table})
 
-    @rank_zero_only  # type: ignore[misc]
-    def log_biochem_metrics(self) -> None:
-        """Compute and log biochemical metrics on validation set."""
-        if hasattr(self.trainer.checkpoint_callback, "best_model_path"):
-            best_model_path = self.trainer.checkpoint_callback.best_model_path
-            if best_model_path is not None:
-                self.load_state_dict(torch.load(best_model_path)["state_dict"])
-
-        locations = ["membrane", "nucleus", "mitochondri"]
-        question = "What is the subcellular location of this protein?"
-        loader = self.trainer.val_dataloaders
-
-        seqs, loc_info = defaultdict(list), defaultdict(list)
-        for batch in loader:
-            for info, seq in zip(batch.info, batch.protein):
-                info_text = self.text_tokenizer.decode(info, skip_special_tokens=True)
-                if "where" in info_text.split("?")[0].lower() or "location" in info_text.split("?")[0].lower():
-                    for lc in locations:
-                        if lc in info_text:
-                            seqs[lc].append(seq)
-                            loc_info[lc].append(info_text)
-
-        tokenized_question = self.text_tokenizer(
-            [f"{self.trainer.datamodule.sequence_placeholder} {question}"], return_tensors="pt"
-        )
-        for lc in locations:
-            print(f"predicting {lc}, {len(seqs[lc])}")
-            correct = 0
-            for seq, expected in tqdm(zip(seqs[lc], loc_info[lc]), total=len(seqs[lc])):
-                with torch.no_grad():
-                    preds = self.generate(
-                        protein_ids=seq.unsqueeze(0).to(self.device),
-                        info_ids=tokenized_question["input_ids"].to(self.device),
-                        max_length=50,
-                    )
-                response = self.text_tokenizer.decode(preds[0].cpu())
-                if lc in response:
-                    correct += 1
-            wandb.log({f"biochem/{lc}_accuracy": correct / len(seqs[lc])})
+    # @rank_zero_only  # type: ignore[misc]
+    # def log_biochem_metrics(self) -> None:
+    #     """Compute and log biochemical metrics on validation set."""
+    #     if hasattr(self.trainer.checkpoint_callback, "best_model_path"):
+    #         best_model_path = self.trainer.checkpoint_callback.best_model_path
+    #         if best_model_path is not None:
+    #             self.load_state_dict(torch.load(best_model_path)["state_dict"])
+    #
+    #     locations = ["membrane", "nucleus", "mitochondri"]
+    #     question = "What is the subcellular location of this protein?"
+    #     loader = self.trainer.val_dataloaders
+    #
+    #     seqs, loc_info = defaultdict(list), defaultdict(list)
+    #     for batch in loader:
+    #         for info, seq in zip(batch.info, batch.protein):
+    #             info_text = self.text_tokenizer.decode(info, skip_special_tokens=True)
+    #             if "where" in info_text.split("?")[0].lower() or "location" in info_text.split("?")[0].lower():
+    #                 for lc in locations:
+    #                     if lc in info_text:
+    #                         seqs[lc].append(seq)
+    #                         loc_info[lc].append(info_text)
+    #
+    #     tokenized_question = self.text_tokenizer(
+    #         [f"{self.trainer.datamodule.sequence_placeholder} {question}"], return_tensors="pt"
+    #     )
+    #     for lc in locations:
+    #         print(f"predicting {lc}, {len(seqs[lc])}")
+    #         correct = 0
+    #         for seq, expected in tqdm(zip(seqs[lc], loc_info[lc]), total=len(seqs[lc])):
+    #             with torch.no_grad():
+    #                 preds = self.generate(
+    #                     protein_ids=seq.unsqueeze(0).to(self.device),
+    #                     info_ids=tokenized_question["input_ids"].to(self.device),
+    #                     max_length=50,
+    #                 )
+    #             response = self.text_tokenizer.decode(preds[0].cpu())
+    #             if lc in response:
+    #                 correct += 1
+    #         wandb.log({f"biochem/{lc}_accuracy": correct / len(seqs[lc])})
 
     @abstractmethod
-    def generate(self, protein_ids: Tensor, info_ids: Tensor, max_length: int = 50) -> Tensor:
-        """Implement generate method."""
+    def generate(
+        self, protein_ids: Tensor, info_ids: Tensor, generation_length: int = 20, keep_prompt: bool = False
+    ) -> List[str]:
+        """Implement generate method that returns a list of generated texts."""
         raise NotImplementedError("generate method for the model not implemented.")
 
     def configure_optimizers(self) -> torch.optim.Optimizer:

@@ -84,11 +84,11 @@ class BiochemMetrics(Metric):
             elif "_binding" in n:
                 bind.append(v)
         if tax:
-            metric_out["taxonomy"] = sum(tax) / len(tax)
+            metric_out["agg_taxonomy"] = sum(tax) / len(tax)
         if loc:
-            metric_out["localization"] = sum(loc) / len(loc)
+            metric_out["agg_localization"] = sum(loc) / len(loc)
         if is_in:
-            metric_out["semantic_loc"] = sum(is_in) / len(is_in)
+            metric_out["agg_semantic_loc"] = sum(is_in) / len(is_in)
         if bind:
-            metric_out["binding"] = sum(bind) / len(bind)
+            metric_out["agg_binding"] = sum(bind) / len(bind)
         return metric_out

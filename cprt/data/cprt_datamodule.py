@@ -23,10 +23,11 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         protein_model: str,
         language_model: str,
         max_protein_length: int,
-        max_text_length: int = 500,
+        max_text_length: int = 250,
         data_field_names: str | List[str] = "info",
         train_batch_size: int = 4,
         eval_batch_size: int | None = None,
+        num_workers: int = 4,
         sequence_placeholder: str = "<protein sequence placeholder> ",
     ) -> None:
         """
@@ -41,11 +42,12 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         :param data_field_names: name of data fields to use for training (must be present in data_dict)
         :param train_batch_size: train batch size
         :param eval_batch_size: size of val/test batch size. If unspecified will be 4 * train_batch_size
+        :param num_workers: number of dataloader workers
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
                                         will be ignored in loss computation by setting label to -100
         """
         super().__init__()
-        self.num_workers = 4
+        self.num_workers = num_workers
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
 

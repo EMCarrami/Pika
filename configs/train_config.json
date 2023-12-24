@@ -8,7 +8,9 @@
     "train_batch_size": 4,
     "eval_batch_size": 16,
     "max_protein_length": 750,
-    "sequence_placeholder": "<protein sequence placeholder> "
+    "max_text_length": 250,
+    "sequence_placeholder": "<protein sequence placeholder> ",
+    "num_workers": 4
   },
   "model": {
     "multimodal_strategy": "cross-attention",
@@ -24,7 +26,7 @@
   },
   "trainer": {
     "precision": "16-mixed",
-    "val_check_interval": 1000,
+    "val_check_interval": 5000,
     "max_epochs": 1,
     "devices": 1
   }

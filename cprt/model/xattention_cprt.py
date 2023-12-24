@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, cast
+from typing import Optional, Tuple
 
 import torch
 from torch import FloatTensor, LongTensor, Tensor, nn
@@ -23,8 +23,8 @@ class CrossAttentionCPrt(BaseCPrtModel):
         """Initialize language and protein encoders."""
         super(CrossAttentionCPrt, self).__init__(language_model, protein_model, protein_layer_to_use)
         # add cross-attention layers
-        protein_emb_size = cast(int, self.esm.embed_tokens.embedding_dim)
-        protein_num_heads = self.esm.layers[0].self_attn.num_heads
+        protein_emb_size = self.esm.embedding_dim
+        protein_num_heads = self.esm.num_heads
         cross_attention_block = nn.ModuleList(
             [
                 CPrtCrossAttentionLayer(

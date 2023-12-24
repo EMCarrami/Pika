@@ -200,11 +200,13 @@ class TruncatedESM2(nn.Module):
         super().__init__()
         assert pretrained_model.__class__.__name__ == "ESM2"
         self.padding_idx = cast(int, pretrained_model.padding_idx)
+        self.embedding_dim = cast(int, pretrained_model.embed_dim)
+        layers = cast(nn.ModuleList, pretrained_model.layers)
+        self.num_heads = cast(int, layers[0].self_attn.num_heads)
 
         if isinstance(layer_to_keep, int):
             self.requires_transformers = True
             self.embed_tokens = cast(nn.Module, pretrained_model.embed_tokens)
-            layers = cast(nn.ModuleList, pretrained_model.layers)
             num_layers = len(layers)
             if layer_to_keep < 0:
                 total_layers = num_layers
@@ -217,9 +219,7 @@ class TruncatedESM2(nn.Module):
         elif layer_to_keep == "wpe":
             self.requires_transformers = False
             text_embedder = cast(nn.Module, pretrained_model.embed_tokens)
-            self.embed_tokens = nn.Sequential(
-                text_embedder, PositionalEncoding1D(cast(int, pretrained_model.embed_dim))
-            )
+            self.embed_tokens = nn.Sequential(text_embedder, PositionalEncoding1D(self.embedding_dim))
         else:
             raise ValueError(
                 f"layer_to_keep {layer_to_keep} invalid. Should be an int indicating the transformer layer number. "

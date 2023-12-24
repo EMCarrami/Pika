@@ -1,20 +1,19 @@
 {
   "seed": 7,
   "data": {
-    "data_dict_path": "uniref50_gpt_data.pkl",
-    "data_df_path": "uniref50_gzip_subsample.csv",
+    "data_dict_path": "uniref50_gptv4_data.pkl",
     "split_ratios": [0.88, 0.02, 0.1]
   },
   "datamodule": {
     "train_batch_size": 4,
-    "eval_batch_size": 16,
+    "eval_batch_size": 2,
     "max_protein_length": 750,
     "sequence_placeholder": "<protein sequence placeholder> "
   },
   "model": {
     "multimodal_strategy": "cross-attention",
-    "language_model": "gpt2-xl",
-    "protein_model": "esm2_t12_35M_UR50D",
+    "language_model": "gpt2",
+    "protein_model": "esm2_t6_8M_UR50D",
     "protein_layer_to_use": -1,
     "perceiver_latent_size": 100,
     "num_perceiver_layers": 1,

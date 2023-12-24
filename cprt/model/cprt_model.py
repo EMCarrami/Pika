@@ -61,7 +61,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         return_dict: Optional[bool] = None,
     ) -> CausalLMOutputWithCrossAttentions:
         """Implement GPT2 compatible forward."""
-        raise NotImplementedError("Implement GPT2 compatible forward.")
+        raise NotImplementedError("Implement a GPT2 compatible forward.")
 
     def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
         """Take a train step."""
@@ -77,23 +77,30 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         torch.cuda.empty_cache()
         return loss
 
-    def validation_step(self, batch: CprtData, batch_idx: int) -> None:
+    def validation_step(self, batch: CprtData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Take a val step."""
-        out = self(
-            protein_ids=batch.protein,
-            info_ids=batch.info,
-            attention_mask=batch.info_mask,
-            labels=batch.labels,
-        )
-        loss: Tensor = out["loss"]
-        self.log("loss/val_loss", loss.item(), prog_bar=True)
-        self.val_perplexity.update(out["logits"][:, :-1].float(), batch.labels[:, 1:])
-        # generation metrics
-        input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
-        generated_text = self.text_tokenizer.batch_decode(torch.argmax(out["logits"], dim=-1), skip_special_tokens=True)
-        self.val_rouge_scores.update(generated_text, input_text)
-        if batch_idx == 0:
-            self.log_example_outputs(input_text[-4:], batch.protein[-4:])
+        if dataloader_idx == 0:
+            out = self(
+                protein_ids=batch.protein,
+                info_ids=batch.info,
+                attention_mask=batch.info_mask,
+                labels=batch.labels,
+            )
+            loss: Tensor = out["loss"]
+            self.log("loss/val_loss", loss.item(), prog_bar=True)
+            self.val_perplexity.update(out["logits"][:, :-1].float(), batch.labels[:, 1:])
+            # generation metrics
+            input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)
+            generated_text = self.text_tokenizer.batch_decode(
+                torch.argmax(out["logits"], dim=-1), skip_special_tokens=True
+            )
+            self.val_rouge_scores.update(generated_text, input_text)
+            if batch_idx == 0:
+                self.log_example_outputs(input_text[-4:], batch.protein[-4:])
+        else:
+            print(batch)
+            print(batch.info.device)
+            exit()
         torch.cuda.empty_cache()
         gc.collect()
 

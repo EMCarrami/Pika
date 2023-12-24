@@ -63,6 +63,10 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         self.sequences = {k: v for k, v in sequences.items() if k in self.split_df["uniprot_id"].to_list()}
 
         self.split_df = self.split_df.melt(id_vars=["uniprot_id"], var_name="metric", value_name="value")
+        self.split_df = self.split_df[~((self.split_df["metric"] == "cofactor") & (self.split_df["value"] == "none"))]
+        self.split_df = self.split_df[
+            ~((self.split_df["metric"] == "localization") & (self.split_df["value"] == "none"))
+        ]
         self.split_df = self.split_df.sort_values(by=["uniprot_id", "metric"], inplace=False).reset_index(drop=True)
 
         self.question_mapping = {

@@ -6,7 +6,7 @@
   },
   "datamodule": {
     "train_batch_size": 4,
-    "eval_batch_size": 4,
+    "eval_batch_size": 16,
     "max_protein_length": 750,
     "sequence_placeholder": "<protein sequence placeholder> "
   },

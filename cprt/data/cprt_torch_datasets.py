@@ -67,7 +67,7 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         self.split_df = self.split_df[
             ~((self.split_df["metric"] == "localization") & (self.split_df["value"] == "none"))
         ]
-        self.split_df = self.split_df.sort_values(by=["uniprot_id", "metric"], inplace=False).reset_index(drop=True)
+        self.split_df = self.split_df.reset_index(drop=True)
 
         self.question_mapping = {
             "DNA_binding": "Does this protein bind to DNA?",

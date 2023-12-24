@@ -84,15 +84,27 @@ class CrossAttentionCPrt(BaseCPrtModel):
         self.eval()
         protein_embeddings = self.esm(protein_ids)
         out = []
-        for question, protein in zip(info_ids, protein_embeddings):
-            mask = question == self.text_tokenizer.eos_token_id
-            prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(question))
+        if torch.any(info_ids == self.text_tokenizer.eos_token_id):
+            for question, protein in zip(info_ids, protein_embeddings):
+                mask = question == self.text_tokenizer.eos_token_id
+                prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(question))
+                pos_offset = 0 if keep_prompt else prompt_len
+                preds = self.cprt_llm.generate(
+                    input_ids=question[:prompt_len].unsqueeze(0),
+                    encoder_hidden_states=protein.unsqueeze(0),
+                    use_cache=False,
+                    max_length=generation_length + prompt_len,
+                )
+                out.append(self.text_tokenizer.decode(preds[0, pos_offset:].cpu(), skip_special_tokens=True))
+        else:
+            prompt_len = info_ids.size(1)
             pos_offset = 0 if keep_prompt else prompt_len
             preds = self.cprt_llm.generate(
-                input_ids=question[:prompt_len].unsqueeze(0),
-                encoder_hidden_states=protein.unsqueeze(0),
+                input_ids=info_ids,
+                encoder_hidden_states=protein_embeddings,
                 use_cache=False,
                 max_length=generation_length + prompt_len,
             )
-            out.append(self.text_tokenizer.decode(preds[0, pos_offset:].cpu(), skip_special_tokens=True))
+            for pred in preds:
+                out.append(self.text_tokenizer.decode(pred[pos_offset:].cpu(), skip_special_tokens=True))
         return out

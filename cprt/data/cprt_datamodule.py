@@ -45,6 +45,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
                                         will be ignored in loss computation by setting label to -100
         """
         super().__init__()
+        self.num_workers = 4
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
 
@@ -88,7 +89,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             batch_size=self.train_batch_size,
             shuffle=True,
             collate_fn=self.data_collate_fn,
-            num_workers=0,
+            num_workers=self.num_workers,
             drop_last=True,
         )
 
@@ -100,14 +101,14 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
                 batch_size=self.eval_batch_size,
                 shuffle=False,
                 collate_fn=self.data_collate_fn,
-                num_workers=0,
+                num_workers=self.num_workers,
             ),
             DataLoader(
                 self.val_metric_dataset,
                 batch_size=self.eval_batch_size,
                 shuffle=False,
                 collate_fn=self.metric_collate_fn,
-                num_workers=0,
+                num_workers=self.num_workers,
             ),
         )
 
@@ -118,7 +119,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             batch_size=self.eval_batch_size,
             shuffle=False,
             collate_fn=self.data_collate_fn,
-            num_workers=0,
+            num_workers=self.num_workers,
         )
 
     def data_collate_fn(self, batch: List[Tuple[str, str]]) -> CprtData:

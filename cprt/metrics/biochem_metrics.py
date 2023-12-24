@@ -35,7 +35,7 @@ class BiochemMetrics(Metric):
                         self.metric_values.append(1 / sum([i in pred.lower() for i in all_kingdoms]))
                     else:
                         self.metric_values.append(0)
-                    self.metric_names.append(f"{name}_{label}")
+                    self.metric_names.append(f"{name}_{label.lower()}")
                 elif name == "localization":
                     # membr(ane), nucle(us), mitoc(hondrion)
                     all_locs = ["membr", "nucle", "mitoc"]

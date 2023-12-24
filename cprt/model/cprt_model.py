@@ -88,7 +88,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
                 labels=batch.labels,
             )
             loss: Tensor = out["loss"]
-            self.log("loss/val_loss", loss.item(), prog_bar=True)
+            self.log("loss/val_loss", loss.item(), prog_bar=True, add_dataloader_idx=False)
             self.val_perplexity.update(out["logits"][:, :-1].float(), batch.labels[:, 1:])
             # generation metrics
             input_text = self.text_tokenizer.batch_decode(batch.info, skip_special_tokens=True)

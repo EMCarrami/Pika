@@ -14,8 +14,8 @@
   },
   "model": {
     "multimodal_strategy": "cross-attention",
-    "language_model": "gpt2",
-    "protein_model": "esm2_t6_8M_UR50D",
+    "language_model": "gpt2-medium",
+    "protein_model": "esm2_t12_35M_UR50D",
     "protein_layer_to_use": -1,
     "perceiver_latent_size": 100,
     "num_perceiver_layers": 1,
@@ -26,8 +26,8 @@
   },
   "trainer": {
     "precision": "16-mixed",
-    "val_check_interval": 5000,
-    "max_epochs": 1,
+    "val_check_interval": 2500,
+    "max_epochs": 5,
     "devices": 1
   }
 }

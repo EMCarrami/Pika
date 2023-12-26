@@ -21,8 +21,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
 
     def __init__(self, language_model: str, protein_model: str, protein_layer_to_use: int = -1) -> None:
         """Initialize language and protein encoders."""
-        super().__init__()
-
+        super(BaseCPrtModel, self).__init__()
         esm, _ = torch.hub.load("facebookresearch/esm:main", protein_model)  # type: ignore[no-untyped-call]
         self.esm = TruncatedESM2(esm, protein_layer_to_use)
         self.esm.eval()

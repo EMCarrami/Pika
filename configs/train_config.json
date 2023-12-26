@@ -1,15 +1,16 @@
 {
   "seed": 7,
-  "data": {
-    "data_dict_path": "uniref50_gptv4_data.pkl",
-    "split_ratios": [0.88, 0.02, 0.1]
-  },
   "datamodule": {
-    "train_batch_size": 4,
-    "eval_batch_size": 16,
+    "data_dict_path": "uniref50_gptv5_data.pkl",
+    "split_ratios": [0.88, 0.02, 0.1],
     "max_protein_length": 750,
     "max_text_length": 250,
+    "data_field_names": "qa",
+    "use_unreal_proteins": true,
     "sequence_placeholder": "<protein sequence placeholder> ",
+    "subsample_data": 25000,
+    "train_batch_size": 4,
+    "eval_batch_size": 16,
     "num_workers": 4
   },
   "model": {

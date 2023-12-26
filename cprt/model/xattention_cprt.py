@@ -22,6 +22,7 @@ class CrossAttentionCPrt(BaseCPrtModel):
     ) -> None:
         """Initialize language and protein encoders."""
         super(CrossAttentionCPrt, self).__init__(language_model, protein_model, protein_layer_to_use)
+        self.save_hyperparameters()
         # add cross-attention layers
         protein_emb_size = self.esm.embedding_dim
         protein_num_heads = self.esm.num_heads

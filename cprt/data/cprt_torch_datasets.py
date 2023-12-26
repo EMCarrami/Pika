@@ -1,3 +1,4 @@
+import random
 from typing import Dict, Literal, Tuple
 
 import pandas as pd
@@ -36,6 +37,14 @@ class CprtDataset(Dataset[Tuple[str, str]]):
         """Get Cprt data for training."""
         uid, info = self.split_df.iloc[idx]
         protein_sequence = self.sequences[uid]
+        if info.endswith("yes_real"):
+            # question is about whether the protein is real
+            # randomly set the answer of half to No and shuffle the protein sequence
+            if random.random() > 0.5:
+                info.replace("yes_real", "Yes")
+            else:
+                protein_sequence = shuffle_protein(protein_sequence)
+                info.replace("yes_real", "No")
         return protein_sequence, info
 
 
@@ -69,17 +78,24 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         ]
         self.split_df = self.split_df.reset_index(drop=True)
 
+        # add shuffled sequences for unreal proteins
+        unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] == 0)]
+        self.sequences |= {f"{uid}_unreal": shuffle_protein(self.sequences[uid]) for uid in unreal_ids["uniprot_id"]}
+
         self.question_mapping = {
+            "is_real": "Is this the sequence of a real protein?",
+            "is_enzyme": "Is this protein an enzyme?",
             "DNA_binding": "Does this protein bind to DNA?",
             "RNA_binding": "Does this protein bind to RNA?",
             "nucleic_acid_binding": "Does this protein bind nucleic acids?",
-            "is_enzyme": "Is this protein an enzyme?",
             "in_membrane": "Does this protein localize to membranes?",
             "in_nucleus": "Does this protein localize to the nucleus?",
             "in_mitochondria": "Does this protein localize to mitochondria?",
             "localization": "What is the sub-cellular location of this protein?",
             "kingdom": "To which kingdom of life does this protein belong?",
             "cofactor": "What is a cofactor of this protein?",
+            "length": "What is the length of this protein?",
+            "mw": "What is the molecular weight of this protein?",
         }
 
     def __len__(self) -> int:
@@ -89,5 +105,15 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
     def __getitem__(self, idx: int) -> Tuple[str, str, str, str | int]:
         """Get Cprt metric data for training."""
         uid, metric, value = self.split_df.iloc[idx]
-        protein_sequence = self.sequences[uid]
+        if metric == "is_real" and value == 0:
+            protein_sequence = self.sequences[f"{uid}_unreal"]
+        else:
+            protein_sequence = self.sequences[uid]
         return protein_sequence, self.question_mapping[metric], metric, value
+
+
+def shuffle_protein(seq: str) -> str:
+    """Shuffle the protein sequence except for the first and last 5 aa."""
+    mid = list(seq[5:-5])
+    random.shuffle(mid)
+    return seq[:5] + "".join(mid) + seq[-5:]

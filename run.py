@@ -33,7 +33,7 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     config["datamodule"]["language_model"] = config["model"]["language_model"]
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]
 
-    datamodule = CprtDataModule(**config["data"], **config["datamodule"])
+    datamodule = CprtDataModule(**config["datamodule"])
 
     multimodal_strategy = config["model"].pop("multimodal_strategy")
     model = CPRT_MODELS[multimodal_strategy](**config["model"])

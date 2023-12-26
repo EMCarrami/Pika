@@ -23,6 +23,7 @@ class SoftPromptCPrt(BaseCPrtModel):
     ) -> None:
         """Initialize language and protein encoders."""
         super(SoftPromptCPrt, self).__init__(language_model, protein_model, protein_layer_to_use)
+        self.save_hyperparameters()
         self.enable_gradient_checkpointing = enable_gradient_checkpointing
         protein_emb_dim = cast(int, self.esm.embed_tokens.embedding_dim)
         protein_num_heads = self.esm.layers[0].self_attn.num_heads

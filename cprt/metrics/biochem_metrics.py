@@ -92,10 +92,12 @@ class BiochemMetrics(Metric):
         for n in metric_counts:
             metric_out[n] = metric_sum[n] / metric_counts[n]
 
-        tax_true, tax_pred = zip(*self.kingdom_preds)
-        metric_out["agg_f1_taxonomy"] = f1_score(tax_true, tax_pred, average="weighted")
-        loc_true, loc_pred = zip(*self.localization_preds)
-        metric_out["agg_f1_localization"] = f1_score(loc_true, loc_pred, average="weighted")
+        if len(self.kingdom_preds) > 0:
+            tax_true, tax_pred = zip(*self.kingdom_preds)
+            metric_out["agg_f1_taxonomy"] = f1_score(tax_true, tax_pred, average="weighted")
+        if len(self.localization_preds) > 0:
+            loc_true, loc_pred = zip(*self.localization_preds)
+            metric_out["agg_f1_localization"] = f1_score(loc_true, loc_pred, average="weighted")
 
         is_in, bind = [], []
         for n, v in metric_out.items():

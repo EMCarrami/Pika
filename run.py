@@ -38,6 +38,9 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     multimodal_strategy = config["model"].pop("multimodal_strategy")
     model = CPRT_MODELS[multimodal_strategy](**config["model"])
 
+    if "n_vals_per_epoch" in config["trainer"]:
+        n_vals = config["trainer"].pop("n_vals_per_epoch")
+        config["trainer"]["val_check_interval"] = len(datamodule.train_dataloader()) // n_vals
     group_name = f"{multimodal_strategy}_{config['model']['protein_model']}_{config['model']['language_model']}"
     checkpoint_callback = ModelCheckpoint(
         monitor="loss/val_loss",

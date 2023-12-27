@@ -27,7 +27,7 @@
   },
   "trainer": {
     "precision": "16-mixed",
-    "val_check_interval": 2500,
+    "n_vals_per_epoch": 5,
     "max_epochs": 5,
     "devices": 1
   }

@@ -41,10 +41,10 @@ class CprtDataset(Dataset[Tuple[str, str]]):
             # question is about whether the protein is real
             # randomly set the answer of half to No and shuffle the protein sequence
             if random.random() > 0.5:
-                info.replace("yes_real", "Yes")
+                info = info.replace("yes_real", "Yes")
             else:
                 protein_sequence = shuffle_protein(protein_sequence)
-                info.replace("yes_real", "No")
+                info = info.replace("yes_real", "No")
         return protein_sequence, info
 
 
@@ -82,6 +82,14 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] == 0)]
         self.sequences |= {f"{uid}_unreal": shuffle_protein(self.sequences[uid]) for uid in unreal_ids["uniprot_id"]}
 
+        zero_shot_metrics = [
+            "DNA_binding",
+            "RNA_binding",
+            "nucleic_acid_binding",
+            "in_membrane",
+            "in_nucleus",
+            "in_mitochondria",
+        ]
         self.question_mapping = {
             "is_real": "Is this the sequence of a real protein?",
             "is_enzyme": "Is this protein an enzyme?",
@@ -98,6 +106,15 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
             "mw": "What is the molecular weight of this protein?",
         }
 
+        self.is_enzyme_dict = (
+            self.split_df[self.split_df.metric == "is_enzyme"]
+            .set_index("uniprot_id")["value"]
+            .map({1: "Yes.", 0: "No."})
+            .to_dict()
+        )
+        for q in zero_shot_metrics:
+            self.question_mapping[q] = "<0-shot> " + self.question_mapping[q]
+
     def __len__(self) -> int:
         """Get dataset length."""
         return len(self.split_df)
@@ -109,7 +126,10 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
             protein_sequence = self.sequences[f"{uid}_unreal"]
         else:
             protein_sequence = self.sequences[uid]
-        return protein_sequence, self.question_mapping[metric], metric, value
+        question = self.question_mapping[metric]
+        if question.startswith("<0-shot>"):
+            question = question.replace("<0-shot>", f"{self.question_mapping['is_enzyme']} {self.is_enzyme_dict[uid]}")
+        return protein_sequence, question, metric, value
 
 
 def shuffle_protein(seq: str) -> str:

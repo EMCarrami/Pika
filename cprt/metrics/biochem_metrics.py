@@ -20,6 +20,8 @@ class BiochemMetrics(Metric):
         super(BiochemMetrics, self).__init__(**kwargs)
         nltk.download("vader_lexicon")
         self.sia = SentimentIntensityAnalyzer()
+        self.sia_yes = self.sia.polarity_scores("Yes")["compound"]
+        self.sia_no = self.sia.polarity_scores("No")["compound"]
         self.add_state("metric_names", [])
         self.add_state("metric_values", [])
         self.add_state("kingdom_preds", [])
@@ -36,11 +38,14 @@ class BiochemMetrics(Metric):
                     pred_size = abs(int(p[pnum.index(True)])) if sum(pnum) == 1 else 0
                     pred_ratio = pred_size / label
                     self.metric_values.append(abs(np.log10(pred_ratio + 0.001)))
+                    self.metric_names.append(f"{name}_error")
                 else:
                     assert label in [0, 1]
-                    sentiment_score = (1 + self.sia.polarity_scores(pred)["compound"]) / 2
-                    self.metric_values.append(1 - abs(label - sentiment_score))
-                self.metric_names.append(name)
+                    # normalise score between sia_yes and sia_no scores
+                    score = (self.sia.polarity_scores(pred)["compound"] - self.sia_no) / (self.sia_yes - self.sia_no)
+                    # clamp the score between 0 and 1
+                    self.metric_values.append(1 - abs(label - max(0, min(1, score))))
+                    self.metric_names.append(name)
             elif isinstance(label, str):
                 if name == "kingdom":
                     # arch(aea), bact(eria), euka(ryota), viru(ses)
@@ -94,19 +99,20 @@ class BiochemMetrics(Metric):
 
         if len(self.kingdom_preds) > 0:
             tax_true, tax_pred = zip(*self.kingdom_preds)
-            metric_out["agg_f1_taxonomy"] = f1_score(tax_true, tax_pred, average="weighted")
+            metric_out["aggregate_f1_taxonomy"] = f1_score(tax_true, tax_pred, average="weighted")
         if len(self.localization_preds) > 0:
             loc_true, loc_pred = zip(*self.localization_preds)
-            metric_out["agg_f1_localization"] = f1_score(loc_true, loc_pred, average="weighted")
+            metric_out["aggregate_f1_localization"] = f1_score(loc_true, loc_pred, average="weighted")
 
-        is_in, bind = [], []
+        is_in, is_in_0 = [], []
         for n, v in metric_out.items():
-            if "in_" in n:
-                is_in.append(v)
-            elif "_binding" in n:
-                bind.append(v)
+            if n.startswith("in_"):
+                if n.endswith("_0"):
+                    is_in_0.append(v)
+                else:
+                    is_in.append(v)
         if is_in:
-            metric_out["agg_semantic_loc"] = sum(is_in) / len(is_in)
-        if bind:
-            metric_out["agg_binding"] = sum(bind) / len(bind)
+            metric_out["aggregate_semantic_location"] = sum(is_in) / len(is_in)
+        if is_in_0:
+            metric_out["aggregate_semantic_location_zero_shot_prompt"] = sum(is_in_0) / len(is_in_0)
         return metric_out

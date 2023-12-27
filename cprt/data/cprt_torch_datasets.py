@@ -67,11 +67,38 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param split: split name
         """
+        zero_shot_metrics = [
+            "in_membrane",
+            "in_nucleus",
+            "in_mitochondria",
+        ]
+        self.question_mapping = {
+            "is_real": "Is this the sequence of a real protein?",
+            "is_enzyme": "Is this protein an enzyme?",
+            "in_membrane": "Does this protein localize to membranes?",
+            "in_nucleus": "Does this protein localize to the nucleus?",
+            "in_mitochondria": "Does this protein localize to mitochondria?",
+            "localization": "What is the sub-cellular location of this protein?",
+            "kingdom": "To which kingdom of life does this protein belong?",
+            "cofactor": "What is a cofactor of this protein?",
+            "mw": "What is the molecular weight of this protein?",
+        }
+        # "length": "What is the length of this protein?",
+        # "DNA_binding": "Does this protein bind to DNA?",
+        # "RNA_binding": "Does this protein bind to RNA?",
+        # "nucleic_acid_binding": "Does this protein bind nucleic acids?",
+        self.zero_shot_tag = "<0-shot-prompt>"
+        self.zero_shot_prompt = f"{self.question_mapping['is_real']} Yes. {self.question_mapping['is_enzyme']}"
         self.split = split
         self.split_df = metadata[metadata.split == self.split].drop("split", axis=1)
         self.sequences = {k: v for k, v in sequences.items() if k in self.split_df["uniprot_id"].to_list()}
 
+        for q in zero_shot_metrics:
+            self.question_mapping[f"{q}_0"] = f"{self.zero_shot_tag} {self.question_mapping[q]}"
+            self.split_df[f"{q}_0"] = self.split_df[q]
+
         self.split_df = self.split_df.melt(id_vars=["uniprot_id"], var_name="metric", value_name="value")
+        self.split_df = self.split_df[self.split_df["metric"].isin(self.question_mapping)]
         self.split_df = self.split_df[~((self.split_df["metric"] == "cofactor") & (self.split_df["value"] == "none"))]
         self.split_df = self.split_df[
             ~((self.split_df["metric"] == "localization") & (self.split_df["value"] == "none"))
@@ -82,38 +109,12 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] == 0)]
         self.sequences |= {f"{uid}_unreal": shuffle_protein(self.sequences[uid]) for uid in unreal_ids["uniprot_id"]}
 
-        zero_shot_metrics = [
-            "DNA_binding",
-            "RNA_binding",
-            "nucleic_acid_binding",
-            "in_membrane",
-            "in_nucleus",
-            "in_mitochondria",
-        ]
-        self.question_mapping = {
-            "is_real": "Is this the sequence of a real protein?",
-            "is_enzyme": "Is this protein an enzyme?",
-            "DNA_binding": "Does this protein bind to DNA?",
-            "RNA_binding": "Does this protein bind to RNA?",
-            "nucleic_acid_binding": "Does this protein bind nucleic acids?",
-            "in_membrane": "Does this protein localize to membranes?",
-            "in_nucleus": "Does this protein localize to the nucleus?",
-            "in_mitochondria": "Does this protein localize to mitochondria?",
-            "localization": "What is the sub-cellular location of this protein?",
-            "kingdom": "To which kingdom of life does this protein belong?",
-            "cofactor": "What is a cofactor of this protein?",
-            "length": "What is the length of this protein?",
-            "mw": "What is the molecular weight of this protein?",
-        }
-
         self.is_enzyme_dict = (
             self.split_df[self.split_df.metric == "is_enzyme"]
             .set_index("uniprot_id")["value"]
             .map({1: "Yes.", 0: "No."})
             .to_dict()
         )
-        for q in zero_shot_metrics:
-            self.question_mapping[q] = "<0-shot> " + self.question_mapping[q]
 
     def __len__(self) -> int:
         """Get dataset length."""
@@ -127,8 +128,8 @@ class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         else:
             protein_sequence = self.sequences[uid]
         question = self.question_mapping[metric]
-        if question.startswith("<0-shot>"):
-            question = question.replace("<0-shot>", f"{self.question_mapping['is_enzyme']} {self.is_enzyme_dict[uid]}")
+        if question.startswith(self.zero_shot_tag):
+            question = question.replace(self.zero_shot_tag, f"{self.zero_shot_prompt} {self.is_enzyme_dict[uid]}")
         return protein_sequence, question, metric, value
 
 

@@ -9,7 +9,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from transformers import logging as transformers_logging
 
-from cprt.data.cprt_datamodule import CprtDataModule
+from cprt.data.cprt_datamodule import CPrtDataModule
 from cprt.model import CPRT_MODELS
 from cprt.model.cprt_model import BaseCPrtModel
 from cprt.utils import ROOT
@@ -33,7 +33,7 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     config["datamodule"]["language_model"] = config["model"]["language_model"]
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]
 
-    datamodule = CprtDataModule(**config["datamodule"])
+    datamodule = CPrtDataModule(**config["datamodule"])
 
     multimodal_strategy = config["model"].pop("multimodal_strategy")
     model = CPRT_MODELS[multimodal_strategy](**config["model"])

@@ -6,12 +6,12 @@ import torch
 import wandb
 from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
-from torch import FloatTensor, LongTensor, Tensor
+from torch import LongTensor, Tensor
 from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import GPT2Tokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
-from cprt.data.cprt_datamodule import CprtData, CprtMetricData
+from cprt.data.cprt_datamodule import CPrtData, CPrtMetricData
 from cprt.metrics.biochem_metrics import BiochemMetrics
 from cprt.model.helper_modules import GPT2CPrt, TruncatedESM2
 
@@ -19,9 +19,19 @@ from cprt.model.helper_modules import GPT2CPrt, TruncatedESM2
 class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
     """Abstract class of Cprt Lightning model."""
 
-    def __init__(self, language_model: str, protein_model: str, protein_layer_to_use: int = -1) -> None:
+    def __init__(
+        self,
+        language_model: str,
+        protein_model: str,
+        protein_layer_to_use: int,
+        lr: float = 1e-4,
+        weight_decay: float = 1e-2,
+    ) -> None:
         """Initialize language and protein encoders."""
         super(BaseCPrtModel, self).__init__()
+        self.lr = lr
+        self.weight_decay = weight_decay
+
         esm, _ = torch.hub.load("facebookresearch/esm:main", protein_model)  # type: ignore[no-untyped-call]
         self.esm = TruncatedESM2(esm, protein_layer_to_use)
         self.esm.eval()
@@ -47,12 +57,8 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         self,
         protein_ids: Tensor,
         info_ids: Tensor,
+        attention_mask: Tensor,
         past_key_values: Optional[Tuple[Tuple[Tensor]]] = None,
-        attention_mask: Optional[FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        token_type_ids: Optional[LongTensor] = None,
-        position_ids: Optional[LongTensor] = None,
-        head_mask: Optional[FloatTensor] = None,
         labels: Optional[LongTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
@@ -62,7 +68,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         """Implement GPT2 compatible forward."""
         raise NotImplementedError("Implement a GPT2 compatible forward.")
 
-    def training_step(self, batch: CprtData, batch_idx: int) -> Tensor:
+    def training_step(self, batch: CPrtData, batch_idx: int) -> Tensor:
         """Take a train step."""
         out = self(protein_ids=batch.protein, info_ids=batch.info, attention_mask=batch.info_mask, labels=batch.labels)
         loss: Tensor = out["loss"]
@@ -76,10 +82,10 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         torch.cuda.empty_cache()
         return loss
 
-    def validation_step(self, batch: CprtData | CprtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
+    def validation_step(self, batch: CPrtData | CPrtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Take a val step."""
         if dataloader_idx == 0:
-            assert isinstance(batch, CprtData)
+            assert isinstance(batch, CPrtData)
             out = self(
                 protein_ids=batch.protein,
                 info_ids=batch.info,
@@ -98,7 +104,7 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
             if batch_idx == 0:
                 self.log_example_outputs(input_text[-4:], batch.protein[-4:])
         else:
-            assert isinstance(batch, CprtMetricData)
+            assert isinstance(batch, CPrtMetricData)
             out = self.generate(protein_ids=batch.protein, info_ids=batch.info, generation_length=20, keep_prompt=False)
             self.val_biochem.update(out, batch.expected_value, batch.metric_name)
         torch.cuda.empty_cache()
@@ -137,46 +143,6 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         """Log wandb table of example outputs."""
         wandb.log({"val_generation": self.text_table})
 
-    # @rank_zero_only  # type: ignore[misc]
-    # def log_biochem_metrics(self) -> None:
-    #     """Compute and log biochemical metrics on validation set."""
-    #     if hasattr(self.trainer.checkpoint_callback, "best_model_path"):
-    #         best_model_path = self.trainer.checkpoint_callback.best_model_path
-    #         if best_model_path is not None:
-    #             self.load_state_dict(torch.load(best_model_path)["state_dict"])
-    #
-    #     locations = ["membrane", "nucleus", "mitochondri"]
-    #     question = "What is the subcellular location of this protein?"
-    #     loader = self.trainer.val_dataloaders
-    #
-    #     seqs, loc_info = defaultdict(list), defaultdict(list)
-    #     for batch in loader:
-    #         for info, seq in zip(batch.info, batch.protein):
-    #             info_text = self.text_tokenizer.decode(info, skip_special_tokens=True)
-    #             if "where" in info_text.split("?")[0].lower() or "location" in info_text.split("?")[0].lower():
-    #                 for lc in locations:
-    #                     if lc in info_text:
-    #                         seqs[lc].append(seq)
-    #                         loc_info[lc].append(info_text)
-    #
-    #     tokenized_question = self.text_tokenizer(
-    #         [f"{self.trainer.datamodule.sequence_placeholder} {question}"], return_tensors="pt"
-    #     )
-    #     for lc in locations:
-    #         print(f"predicting {lc}, {len(seqs[lc])}")
-    #         correct = 0
-    #         for seq, expected in tqdm(zip(seqs[lc], loc_info[lc]), total=len(seqs[lc])):
-    #             with torch.no_grad():
-    #                 preds = self.generate(
-    #                     protein_ids=seq.unsqueeze(0).to(self.device),
-    #                     info_ids=tokenized_question["input_ids"].to(self.device),
-    #                     max_length=50,
-    #                 )
-    #             response = self.text_tokenizer.decode(preds[0].cpu())
-    #             if lc in response:
-    #                 correct += 1
-    #         wandb.log({f"biochem/{lc}_accuracy": correct / len(seqs[lc])})
-
     @abstractmethod
     def generate(
         self, protein_ids: Tensor, info_ids: Tensor, generation_length: int = 20, keep_prompt: bool = False
@@ -186,5 +152,5 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4, weight_decay=1e-2)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         return optimizer

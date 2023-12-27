@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple, cast
 
 import torch
-from torch import FloatTensor, LongTensor, Tensor, nn
+from torch import LongTensor, Tensor, nn
 from torch.utils.checkpoint import checkpoint
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
@@ -20,9 +20,11 @@ class SoftPromptCPrt(BaseCPrtModel):
         perceiver_latent_size: int = 20,
         num_perceiver_layers: int = 1,
         enable_gradient_checkpointing: bool = False,
+        lr: float = 1e-4,
+        weight_decay: float = 1e-2,
     ) -> None:
         """Initialize language and protein encoders."""
-        super(SoftPromptCPrt, self).__init__(language_model, protein_model, protein_layer_to_use)
+        super(SoftPromptCPrt, self).__init__(language_model, protein_model, protein_layer_to_use, lr, weight_decay)
         self.save_hyperparameters()
         self.enable_gradient_checkpointing = enable_gradient_checkpointing
         protein_emb_dim = cast(int, self.esm.embed_tokens.embedding_dim)
@@ -38,12 +40,8 @@ class SoftPromptCPrt(BaseCPrtModel):
         self,
         protein_ids: Tensor,
         info_ids: Tensor,
+        attention_mask: Tensor,
         past_key_values: Optional[Tuple[Tuple[Tensor]]] = None,
-        attention_mask: Optional[FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        token_type_ids: Optional[LongTensor] = None,
-        position_ids: Optional[LongTensor] = None,
-        head_mask: Optional[FloatTensor] = None,
         labels: Optional[LongTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
@@ -69,9 +67,6 @@ class SoftPromptCPrt(BaseCPrtModel):
             attention_mask=torch.concat(
                 [attention_mask.new_full(size=(protein_latents.shape[:2]), fill_value=1), attention_mask], dim=1
             ),
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
             labels=torch.concat([labels.new_full(size=(protein_latents.shape[:2]), fill_value=-100), labels], dim=1),
             use_cache=use_cache,
             output_attentions=output_attentions,
@@ -93,19 +88,37 @@ class SoftPromptCPrt(BaseCPrtModel):
         protein_embeddings = self.protein_layer_norm(protein_embeddings)
         protein_latents = self.perceiver(protein_embeddings)
         out = []
-        for q_ids, q_embs, protein in zip(info_ids, info_embeddings, protein_latents):
-            mask = q_ids == self.text_tokenizer.eos_token_id
-            prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(q_ids))
+        if torch.any(info_ids == self.text_tokenizer.eos_token_id):
+            for q_ids, q_embs, protein in zip(info_ids, info_embeddings, protein_latents):
+                mask = q_ids == self.text_tokenizer.eos_token_id
+                prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(q_ids))
+                pos_offset = 0 if keep_prompt else prompt_len
+                preds = self.cprt_llm.generate(
+                    input_ids=torch.concat(
+                        [q_ids.new_full(size=(protein.shape[:1]), fill_value=0), q_ids[:prompt_len]]
+                    ).unsqueeze(0),
+                    inputs_embeds=torch.concat([protein, q_embs], dim=0).unsqueeze(0),
+                    use_cache=True,
+                    max_length=generation_length + prompt_len + len(protein),
+                )
+                out.append(
+                    self.text_tokenizer.decode(preds[0, len(protein) + pos_offset :].cpu(), skip_special_tokens=True)
+                )
+        else:
+            prompt_len = info_ids.size(1)
             pos_offset = 0 if keep_prompt else prompt_len
             preds = self.cprt_llm.generate(
                 input_ids=torch.concat(
-                    [q_ids.new_full(size=(protein.shape[:1]), fill_value=0), q_ids[:prompt_len]]
-                ).unsqueeze(0),
-                inputs_embeds=torch.concat([protein, q_embs], dim=0).unsqueeze(0),
+                    [info_ids.new_full(size=(protein_latents.shape[:2]), fill_value=0), info_ids], dim=1
+                ),
+                inputs_embeds=torch.concat([protein_latents, info_embeddings], dim=1),
                 use_cache=True,
-                max_length=generation_length + prompt_len + len(protein),
+                max_length=generation_length + prompt_len + protein_latents.size(1),
             )
-            out.append(
-                self.text_tokenizer.decode(preds[0, len(protein) + pos_offset :].cpu(), skip_special_tokens=True)
-            )
+            for pred in preds:
+                out.append(
+                    self.text_tokenizer.decode(
+                        pred[protein_latents.size(1) + pos_offset :].cpu(), skip_special_tokens=True
+                    )
+                )
         return out

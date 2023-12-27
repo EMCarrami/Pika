@@ -1,11 +1,11 @@
 from typing import List, Optional, Tuple, cast
 
 import torch
-from torch import FloatTensor, LongTensor, Tensor, nn
+from torch import LongTensor, Tensor, nn
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from cprt.model.cprt_model import BaseCPrtModel
-from cprt.model.helper_modules import CPrtCrossAttentionLayer
+from cprt.model.helper_modules import CPrtCrossAttentionLayer, CPrtDummyCrossAttention
 
 
 class CrossAttentionCPrt(BaseCPrtModel):
@@ -18,14 +18,27 @@ class CrossAttentionCPrt(BaseCPrtModel):
         protein_layer_to_use: int = -1,
         perceiver_latent_size: int = 20,
         num_perceiver_layers: int = 1,
+        layers_to_cross_attend: List[int] | None = None,
         enable_gradient_checkpointing: bool = False,
+        lr: float = 1e-4,
+        weight_decay: float = 1e-2,
     ) -> None:
         """Initialize language and protein encoders."""
-        super(CrossAttentionCPrt, self).__init__(language_model, protein_model, protein_layer_to_use)
+        super(CrossAttentionCPrt, self).__init__(language_model, protein_model, protein_layer_to_use, lr, weight_decay)
         self.save_hyperparameters()
-        # add cross-attention layers
+        # correct layers_to_cross_attend
+        n_layers = len(self.cprt_llm.transformer.h)
+        if layers_to_cross_attend is None:
+            layers_to_cross_attend = list(range(n_layers))
+        assert (
+            isinstance(layers_to_cross_attend, list)
+            and all([isinstance(i, int) for i in layers_to_cross_attend])
+            and max(layers_to_cross_attend) < n_layers
+        ), "layers_to_cross_attend must be None or list[int]"
+        layers_to_cross_attend = [i if i >= 0 else n_layers + i for i in layers_to_cross_attend]
         protein_emb_size = self.esm.embedding_dim
         protein_num_heads = self.esm.num_heads
+        # add cross-attention layers or dummy ones when cross-attention not needed
         cross_attention_block = nn.ModuleList(
             [
                 CPrtCrossAttentionLayer(
@@ -36,7 +49,9 @@ class CrossAttentionCPrt(BaseCPrtModel):
                     num_perceiver_layers,
                     enable_gradient_checkpointing,
                 )
-                for decoder in self.cprt_llm.transformer.h
+                if layer_id in layers_to_cross_attend
+                else CPrtDummyCrossAttention(decoder)
+                for layer_id, decoder in enumerate(self.cprt_llm.transformer.h)
             ]
         )
         self.cprt_llm.transformer.h = cross_attention_block
@@ -45,12 +60,8 @@ class CrossAttentionCPrt(BaseCPrtModel):
         self,
         protein_ids: Tensor,
         info_ids: Tensor,
+        attention_mask: Tensor,
         past_key_values: Optional[Tuple[Tuple[Tensor]]] = None,
-        attention_mask: Optional[FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        token_type_ids: Optional[LongTensor] = None,
-        position_ids: Optional[LongTensor] = None,
-        head_mask: Optional[FloatTensor] = None,
         labels: Optional[LongTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
@@ -65,11 +76,7 @@ class CrossAttentionCPrt(BaseCPrtModel):
             input_ids=info_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
             encoder_hidden_states=protein_embeddings,
-            encoder_attention_mask=encoder_attention_mask,
             labels=labels,
             use_cache=use_cache,
             output_attentions=output_attentions,

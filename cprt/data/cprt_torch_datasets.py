@@ -5,7 +5,7 @@ import pandas as pd
 from torch.utils.data import Dataset
 
 
-class CprtDataset(Dataset[Tuple[str, str]]):
+class CPrtDataset(Dataset[Tuple[str, str]]):
     """Cprt torch dataset."""
 
     def __init__(
@@ -48,7 +48,7 @@ class CprtDataset(Dataset[Tuple[str, str]]):
         return protein_sequence, info
 
 
-class CprtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
+class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
     """Torch dataset class for biochem metrics."""
 
     def __init__(

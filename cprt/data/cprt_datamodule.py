@@ -7,15 +7,15 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, GPT2Tokenizer
 
-from cprt.data.cprt_torch_datasets import CprtDataset, CprtMetricDataset
+from cprt.data.cprt_torch_datasets import CPrtDataset, CPrtMetricDataset
 from cprt.data.data_utils import load_data_from_path, random_split_df
 
-CprtData = namedtuple("CprtData", ["info", "info_mask", "protein", "labels"])
-CprtMetricData = namedtuple("CprtMetricData", ["info", "protein", "metric_name", "expected_value"])
+CPrtData = namedtuple("CPrtData", ["info", "info_mask", "protein", "labels"])
+CPrtMetricData = namedtuple("CPrtMetricData", ["info", "protein", "metric_name", "expected_value"])
 
 
-class CprtDataModule(LightningDataModule):  # type: ignore[misc]
-    """Data module and collator for CprtData."""
+class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
+    """Data module and collator for CPrtData."""
 
     def __init__(
         self,
@@ -51,7 +51,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         :param eval_batch_size: size of val/test batch size. If unspecified will be 4 * train_batch_size
         :param num_workers: number of dataloader workers
         """
-        super(CprtDataModule, self).__init__()
+        super(CPrtDataModule, self).__init__()
         self.num_workers = num_workers
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
@@ -89,9 +89,9 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         }
         metadata.loc[:, "examples"] = metadata["uniprot_id"].apply(lambda x: data_fields[x])
         sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
-        self.train_dataset = CprtDataset(metadata, sequences, "train")
-        self.val_dataset = CprtDataset(metadata, sequences, "val")
-        self.test_dataset = CprtDataset(metadata, sequences, "test")
+        self.train_dataset = CPrtDataset(metadata, sequences, "train")
+        self.val_dataset = CPrtDataset(metadata, sequences, "val")
+        self.test_dataset = CPrtDataset(metadata, sequences, "test")
 
         metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")
         metrics_df.reset_index(inplace=True)
@@ -99,7 +99,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         if use_unreal_proteins:
             metrics_df["is_real"] = np.random.choice([0, 1], size=len(metrics_df))
         metrics_df = pd.merge(metrics_df, metadata[["uniprot_id", "split"]], on="uniprot_id")
-        self.val_metric_dataset = CprtMetricDataset(metrics_df, sequences, "val")
+        self.val_metric_dataset = CPrtMetricDataset(metrics_df, sequences, "val")
 
     def train_dataloader(self) -> DataLoader:  # type: ignore[type-arg]
         """Set up train loader."""
@@ -141,7 +141,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             num_workers=self.num_workers,
         )
 
-    def data_collate_fn(self, batch: List[Tuple[str, str]]) -> CprtData:
+    def data_collate_fn(self, batch: List[Tuple[str, str]]) -> CPrtData:
         """Collate, pad and tokenize protein and info strings."""
         protein_sequences, info_list = zip(*batch)
         info_list = [f"{self.sequence_placeholder} {i}{self.text_tokenizer.eos_token}" for i in info_list]
@@ -157,14 +157,14 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
         for i, pad_idx in enumerate((1 - tokenized_info["attention_mask"]).sum(1)):
             if pad_idx > 0:
                 labels[i, -pad_idx:] = -100
-        return CprtData(
+        return CPrtData(
             info=tokenized_info["input_ids"],
             info_mask=tokenized_info["attention_mask"],
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             labels=labels,
         )
 
-    def metric_collate_fn(self, batch: List[Tuple[str, str, str, str | int]]) -> CprtMetricData:
+    def metric_collate_fn(self, batch: List[Tuple[str, str, str, str | int]]) -> CPrtMetricData:
         """Collate, pad and tokenize protein and metric information."""
         protein_sequences, questions, metric_list, values = zip(*batch)
         questions = [f"{self.sequence_placeholder} {i}" for i in questions]
@@ -175,7 +175,7 @@ class CprtDataModule(LightningDataModule):  # type: ignore[misc]
             truncation=True,
             max_length=self.max_text_length,
         )
-        return CprtMetricData(
+        return CPrtMetricData(
             info=tokenized_questions["input_ids"],
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             metric_name=metric_list,

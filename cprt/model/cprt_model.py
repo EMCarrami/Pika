@@ -25,6 +25,8 @@ from cprt.model.helper_modules import (
 class CPrtModel(LightningModule):  # type: ignore[misc]
     """Abstract class of Cprt Lightning model."""
 
+    MultiModalLayer: Type[CPrtCrossAttentionLayer] | Type[CPrtSoftPromptLayer]
+
     def __init__(
         self,
         language_model: str,
@@ -46,6 +48,13 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             assert multimodal_layers == [
                 0
             ], "For soft-prompting only first decoder can be made multimodal. Set multimodal_layers==[0]"
+            self.position_id_start = perceiver_latent_size
+            self.MultiModalLayer = CPrtSoftPromptLayer
+        elif multimodal_strategy == "cross-attention":
+            self.position_id_start = 0
+            self.MultiModalLayer = CPrtCrossAttentionLayer
+        else:
+            raise ValueError("only cross-attention and soft-prompt multimodal strategies are supported.")
         self.language_model = language_model
         self.protein_model = protein_model
         self.multimodal_strategy = multimodal_strategy
@@ -73,12 +82,8 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model)
         if "gpt2" in self.language_model:
             self.cprt_llm = GPT2CPrt.from_pretrained(self.language_model)
-            MultiModalLayer: Type[torch.nn.Module] = CPrtCrossAttentionLayer
-            self.position_id_start = 0
         elif "phi" in self.language_model:
             self.cprt_llm = PhiCPrt.from_pretrained(self.language_model)
-            MultiModalLayer = CPrtSoftPromptLayer
-            self.position_id_start = self.perceiver_latent_size
         else:
             raise ValueError(f"only gpt2 and microsoft/phi models are supported. {self.language_model} was given")
         assert (
@@ -106,7 +111,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         # make decoder layers multimodal or skip-encoder
         multimodal_block = torch.nn.ModuleList(
             [
-                MultiModalLayer(
+                self.MultiModalLayer(
                     protein_emb_dim,
                     text_emb_dim,
                     decoder,

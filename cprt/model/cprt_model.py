@@ -1,6 +1,5 @@
 import gc
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Type, cast
 
 import torch
 import wandb
@@ -14,55 +13,116 @@ from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 from cprt.data.cprt_datamodule import CPrtData, CPrtMetricData
 from cprt.metrics.biochem_metrics import BiochemMetrics
 from cprt.model.adapted_phi_models import PhiCPrt
-from cprt.model.helper_modules import GPT2CPrt, TruncatedESM2
+from cprt.model.helper_modules import (
+    CPrtCrossAttentionLayer,
+    CPrtEncoderSkipLayer,
+    CPrtSoftPromptLayer,
+    GPT2CPrt,
+    TruncatedESM2,
+)
 
 
-class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
+class CPrtModel(LightningModule):  # type: ignore[misc]
     """Abstract class of Cprt Lightning model."""
 
     def __init__(
         self,
         language_model: str,
         protein_model: str,
-        protein_layer_to_use: int,
+        multimodal_strategy: Literal["cross-attention", "soft-prompt"],
+        protein_layer_to_use: int = -1,
+        perceiver_latent_size: int = 20,
+        num_perceiver_layers: int = 1,
+        multimodal_layers: List[int] | Literal["all"] = "all",
+        enable_gradient_checkpointing: bool = False,
         lr: float = 1e-4,
         weight_decay: float = 1e-2,
     ) -> None:
         """Initialize language and protein encoders."""
-        super(BaseCPrtModel, self).__init__()
+        super(CPrtModel, self).__init__()
+        assert multimodal_strategy in ["cross-attention", "soft-prompt"]
+        if multimodal_strategy == "soft-prompt":
+            assert multimodal_layers == [
+                0
+            ], "For soft-prompting only first decoder can be made multimodal. Set multimodal_layers==[0]"
+        self.language_model = language_model
+        self.protein_model = protein_model
+        self.multimodal_strategy = multimodal_strategy
+        self.protein_layer_to_use = protein_layer_to_use
+        self.perceiver_latent_size = perceiver_latent_size
+        self.num_perceiver_layers = num_perceiver_layers
+        self.multimodal_layers = multimodal_layers
+        self.enable_gradient_checkpointing = enable_gradient_checkpointing
         self.lr = lr
         self.weight_decay = weight_decay
 
-        esm, _ = torch.hub.load("facebookresearch/esm:main", protein_model)  # type: ignore[no-untyped-call]
-        self.esm = TruncatedESM2(esm, protein_layer_to_use)
+        self.configure_protein_model()
+        self.configure_language_model()
+        self.configure_metrics()
+
+    def configure_protein_model(self) -> None:
+        esm, _ = torch.hub.load("facebookresearch/esm:main", self.protein_model)  # type: ignore[no-untyped-call]
+        self.esm = TruncatedESM2(esm, self.protein_layer_to_use)
         self.esm.eval()
         for param in self.esm.parameters():
             param.requires_grad = False
 
-        self.text_tokenizer = AutoTokenizer.from_pretrained(language_model)
-        if "gpt2" in language_model:
-            self.cprt_llm = GPT2CPrt.from_pretrained(language_model)
-        elif "phi" in language_model:
-            self.cprt_llm = PhiCPrt.from_pretrained(language_model)
+    def configure_language_model(self) -> None:
+        """Configure cprt_llm model and add cross-attention/soft-prompt/skip layers to the decoder."""
+        self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model)
+        if "gpt2" in self.language_model:
+            self.cprt_llm = GPT2CPrt.from_pretrained(self.language_model)
+            MultiModalLayer: Type[torch.nn.Module] = CPrtCrossAttentionLayer
+            self.position_id_start = 0
+        elif "phi" in self.language_model:
+            self.cprt_llm = PhiCPrt.from_pretrained(self.language_model)
+            MultiModalLayer = CPrtSoftPromptLayer
+            self.position_id_start = self.perceiver_latent_size
         else:
-            raise ValueError(f"only gpt2 and microsoft/phi models are supported. {language_model} was given")
+            raise ValueError(f"only gpt2 and microsoft/phi models are supported. {self.language_model} was given")
         assert (
             self.cprt_llm.transformer.gradient_checkpointing is False
         ), "gradient_checkpointing in LLMs not supported as the order of args to the input cannot be guaranteed."
-        self.n_llm_layers = len(self.cprt_llm.transformer.h)
         for param in self.cprt_llm.parameters():
             param.requires_grad = False
 
-        self.train_perplexity = Perplexity(ignore_index=-100)
-        self.val_perplexity = Perplexity(ignore_index=-100)
-        self.val_rouge_scores = ROUGEScore()
-        self.val_biochem = BiochemMetrics()
-
-        self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["global_step", "expected_answer", "generated_text"]
+        protein_emb_dim = self.esm.embedding_dim
+        protein_num_heads = self.esm.num_heads
+        text_emb_dim = self.cprt_llm.config.n_embd
+        dropout = self.cprt_llm.config.attn_pdrop
+        num_decoder_heads = self.cprt_llm.config.n_head
+        decoder_layers = self.cprt_llm.transformer.h
+        n_llm_layers = len(decoder_layers)
+        # assign which layers to make multimodal
+        if self.multimodal_layers == "all":
+            self.multimodal_layers = list(range(n_llm_layers))
+        assert (
+            isinstance(self.multimodal_layers, list)
+            and all([isinstance(i, int) for i in self.multimodal_layers])
+            and max(self.multimodal_layers) < n_llm_layers
+        ), "multimodal_layers must be all or list[int]"
+        self.multimodal_layers = [i if i >= 0 else n_llm_layers + i for i in self.multimodal_layers]
+        # make decoder layers multimodal or skip-encoder
+        multimodal_block = torch.nn.ModuleList(
+            [
+                MultiModalLayer(
+                    protein_emb_dim,
+                    text_emb_dim,
+                    decoder,
+                    num_decoder_heads,
+                    protein_num_heads,
+                    self.perceiver_latent_size,
+                    self.num_perceiver_layers,
+                    self.enable_gradient_checkpointing,
+                    dropout,
+                )
+                if layer_id in self.multimodal_layers
+                else CPrtEncoderSkipLayer(decoder)
+                for layer_id, decoder in enumerate(decoder_layers)
+            ]
         )
+        self.cprt_llm.transformer.h = multimodal_block
 
-    @abstractmethod
     def forward(
         self,
         protein_ids: Tensor,
@@ -75,8 +135,27 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> CausalLMOutputWithCrossAttentions:
-        """Implement GPT2 compatible forward."""
-        raise NotImplementedError("Implement a GPT2 compatible forward.")
+        """Add protein latents as word embedding to the beginning of the sentence."""
+        with torch.no_grad():
+            protein_embeddings = self.esm(protein_ids)
+        position_ids = torch.arange(
+            self.position_id_start, info_ids.size(1) + self.position_id_start, dtype=torch.long, device=self.device
+        )
+        out = self.cprt_llm(
+            input_ids=info_ids,
+            position_ids=position_ids.unsqueeze(0),
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            encoder_hidden_states=protein_embeddings,
+            labels=labels,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+        # adjust logits to remove soft-prompts if needed
+        out["logits"] = out["logits"][:, self.position_id_start :]
+        return out
 
     def training_step(self, batch: CPrtData, batch_idx: int) -> Tensor:
         """Take a train step."""
@@ -153,14 +232,50 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         """Log wandb table of example outputs."""
         wandb.log({"val_generation": self.text_table})
 
-    @abstractmethod
+    @torch.no_grad()
     def generate(
         self, protein_ids: Tensor, info_ids: Tensor, generation_length: int = 20, keep_prompt: bool = False
     ) -> List[str]:
-        """Implement generate method that returns a list of generated texts."""
-        raise NotImplementedError("generate method for the model not implemented.")
+        """Generate using input_ids and protein_embeddings as encoder_hidden_states."""
+        self.eval()
+        protein_embeddings = self.esm(protein_ids)
+        out = []
+        if torch.any(info_ids == self.text_tokenizer.eos_token_id):
+            for question, protein in zip(info_ids, protein_embeddings):
+                mask = question == self.text_tokenizer.eos_token_id
+                prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(question))
+                pos_offset = 0 if keep_prompt else prompt_len
+                preds = self.cprt_llm.generate(
+                    input_ids=question[:prompt_len].unsqueeze(0),
+                    encoder_hidden_states=protein.unsqueeze(0),
+                    use_cache=False,
+                    max_length=generation_length + prompt_len,
+                )
+                out.append(self.text_tokenizer.decode(preds[0, pos_offset:].cpu(), skip_special_tokens=True))
+        else:
+            prompt_len = info_ids.size(1)
+            pos_offset = 0 if keep_prompt else prompt_len
+            preds = self.cprt_llm.generate(
+                input_ids=info_ids,
+                encoder_hidden_states=protein_embeddings,
+                use_cache=False,
+                max_length=generation_length + prompt_len,
+            )
+            for pred in preds:
+                out.append(self.text_tokenizer.decode(pred[pos_offset:].cpu(), skip_special_tokens=True))
+        return out
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         return optimizer
+
+    def configure_metrics(self) -> None:
+        """Configure metrics."""
+        self.train_perplexity = Perplexity(ignore_index=-100)
+        self.val_perplexity = Perplexity(ignore_index=-100)
+        self.val_rouge_scores = ROUGEScore()
+        self.val_biochem = BiochemMetrics()
+        self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
+            columns=["global_step", "expected_answer", "generated_text"]
+        )

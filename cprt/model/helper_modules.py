@@ -24,8 +24,62 @@ class GPT2CPrt(GPT2LMHeadModel):  # type: ignore[misc]
         return model_inputs
 
 
+class CPrtSoftPromptLayer(nn.Module):
+    """Perceiver and soft-prompt decoder to inject before the first decoder layer of LLM."""
+
+    def __init__(
+        self,
+        protein_emb_dim: int,
+        text_emb_dim: int,
+        decoder: GPT2Block | PhiDecoderLayer,
+        num_decoder_heads: int,
+        num_perceiver_heads: int,
+        perceiver_latent_size: int,
+        num_perceiver_layers: int,
+        enable_gradient_checkpointing: bool,
+        dropout: float,
+    ) -> None:
+        super(CPrtSoftPromptLayer, self).__init__()
+        self.enable_gradient_checkpointing = enable_gradient_checkpointing
+        self.protein_layer_norm = nn.LayerNorm(protein_emb_dim)
+        self.perceiver = Perceiver(
+            protein_emb_dim, perceiver_latent_size, text_emb_dim, num_perceiver_heads, num_perceiver_layers, dropout
+        )
+        self.decoder = decoder
+
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask: Tensor,
+        encoder_hidden_states: Tensor,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
+        **kwargs: Any,
+    ) -> Union[Tuple[Tensor], Optional[Tuple[Tensor, Tuple[Tensor, ...]]]]:
+        """Forward with soft-prompting.
+
+        kwargs maybe different between different models.
+        e.g. past_key_value in Phi vs layer_past in GPT2
+        """
+        assert encoder_hidden_states is not None
+        encoder_hidden_states = self.protein_layer_norm(encoder_hidden_states)
+        if self.training and self.enable_gradient_checkpointing:
+            protein_latents = checkpoint(self.perceiver, encoder_hidden_states)
+        else:
+            protein_latents = self.perceiver(encoder_hidden_states)
+        return self.decoder(  # type: ignore[no-any-return]
+            torch.concat([protein_latents, hidden_states], dim=1),
+            attention_mask=torch.concat(
+                [attention_mask.new_full(size=(protein_latents.shape[:2]), fill_value=1), attention_mask], dim=1
+            ),
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            **kwargs,
+        )
+
+
 class CPrtCrossAttentionLayer(nn.Module):
-    """Perceiver and Cross attention decoder layer to inject into a GPT2 decoder."""
+    """Perceiver and Cross attention decoder layer to inject into an LLM decoder."""
 
     def __init__(
         self,
@@ -87,14 +141,14 @@ class CPrtCrossAttentionLayer(nn.Module):
         )
 
 
-class CPrtDummyCrossAttention(nn.Module):
-    """Dummy cross attention module to remove encoder states when not needed."""
+class CPrtEncoderSkipLayer(nn.Module):
+    """Module to remove encoder states when not needed."""
 
     def __init__(
         self,
         decoder: GPT2Block | PhiDecoderLayer,
     ) -> None:
-        super(CPrtDummyCrossAttention, self).__init__()
+        super(CPrtEncoderSkipLayer, self).__init__()
         self.decoder = decoder
 
     def forward(

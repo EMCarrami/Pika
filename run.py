@@ -10,8 +10,7 @@ from lightning.pytorch.loggers import WandbLogger
 from transformers import logging as transformers_logging
 
 from cprt.data.cprt_datamodule import CPrtDataModule
-from cprt.model import CPRT_MODELS
-from cprt.model.cprt_model import BaseCPrtModel
+from cprt.model.cprt_model import CPrtModel
 from cprt.utils import ROOT
 
 transformers_logging.set_verbosity_error()
@@ -20,7 +19,7 @@ transformers_logging.set_verbosity_error()
 class ExceptionHandlerCallback(Callback):  # type: ignore[misc]
     """Callback to handle exceptions."""
 
-    def on_exception(self, trainer: Trainer, model: BaseCPrtModel, exception: Exception) -> None:
+    def on_exception(self, trainer: Trainer, model: CPrtModel, exception: Exception) -> None:
         """Run final logs."""
         model.on_train_end()
 
@@ -35,8 +34,8 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
 
     datamodule = CPrtDataModule(**config["datamodule"])
 
-    multimodal_strategy = config["model"].pop("multimodal_strategy")
-    model = CPRT_MODELS[multimodal_strategy](**config["model"])
+    multimodal_strategy = config["model"]["multimodal_strategy"]
+    model = CPrtModel(**config["model"])
 
     if "n_vals_per_epoch" in config["trainer"]:
         n_vals = config["trainer"].pop("n_vals_per_epoch")

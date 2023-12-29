@@ -9,24 +9,24 @@
     "use_unreal_proteins": true,
     "sequence_placeholder": "<protein sequence placeholder> ",
     "subsample_data": 25000,
-    "train_batch_size": 4,
-    "eval_batch_size": 16,
-    "num_workers": 4
+    "train_batch_size": 2,
+    "eval_batch_size": 2,
+    "num_workers": 0
   },
   "model": {
-    "multimodal_strategy": "cross-attention",
     "language_model": "gpt2-medium",
     "protein_model": "esm2_t12_35M_UR50D",
+    "multimodal_strategy": "cross-attention",
     "protein_layer_to_use": -1,
     "perceiver_latent_size": 100,
     "num_perceiver_layers": 1,
-    "layers_to_cross_attend": null,
+    "multimodal_layers": [0],
     "enable_gradient_checkpointing": false,
     "lr": 1e-4,
-    "weight_decay": 1e-2
+    "weight_decay": 1e-4
   },
   "wandb": {
-    "project": "Cprt-Experiments"
+    "project": "Cprt-Paper"
   },
   "trainer": {
     "precision": "16-mixed",

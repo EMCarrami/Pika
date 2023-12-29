@@ -9,9 +9,9 @@
     "use_unreal_proteins": true,
     "sequence_placeholder": "<protein sequence placeholder> ",
     "subsample_data": 25000,
-    "train_batch_size": 2,
-    "eval_batch_size": 2,
-    "num_workers": 0
+    "train_batch_size": 8,
+    "eval_batch_size": 32,
+    "num_workers": 4
   },
   "model": {
     "language_model": "gpt2-medium",
@@ -20,7 +20,7 @@
     "protein_layer_to_use": -1,
     "perceiver_latent_size": 100,
     "num_perceiver_layers": 1,
-    "multimodal_layers": [0],
+    "multimodal_layers": "all",
     "enable_gradient_checkpointing": false,
     "lr": 1e-4,
     "weight_decay": 1e-4

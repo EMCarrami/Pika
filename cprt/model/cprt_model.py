@@ -40,6 +40,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
     ) -> None:
         """Initialize language and protein encoders."""
         super(CPrtModel, self).__init__()
+        self.save_hyperparameters()
         assert multimodal_strategy in ["cross-attention", "soft-prompt"]
         if multimodal_strategy == "soft-prompt":
             assert multimodal_layers == [
@@ -190,7 +191,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 torch.argmax(out["logits"], dim=-1), skip_special_tokens=True
             )
             self.val_rouge_scores.update(generated_text, input_text)
-            if batch_idx == 0:
+            if batch_idx == 0 and not self.trainer.sanity_checking:
                 self.log_example_outputs(input_text[-4:], batch.protein[-4:])
         else:
             assert isinstance(batch, CPrtMetricData)

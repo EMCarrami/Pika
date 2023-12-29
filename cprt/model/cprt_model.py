@@ -5,7 +5,7 @@ import torch
 import wandb
 from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
-from torch import LongTensor, Tensor
+from torch import Tensor
 from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import AutoTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
@@ -44,20 +44,18 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         super(CPrtModel, self).__init__()
         self.save_hyperparameters()
         assert multimodal_strategy in ["cross-attention", "soft-prompt"]
+        self.multimodal_strategy = multimodal_strategy
         if multimodal_strategy == "soft-prompt":
             assert multimodal_layers == [
                 0
             ], "For soft-prompting only first decoder can be made multimodal. Set multimodal_layers==[0]"
-            self.position_id_start = perceiver_latent_size
             self.MultiModalLayer = CPrtSoftPromptLayer
         elif multimodal_strategy == "cross-attention":
-            self.position_id_start = 0
             self.MultiModalLayer = CPrtCrossAttentionLayer
         else:
             raise ValueError("only cross-attention and soft-prompt multimodal strategies are supported.")
         self.language_model = language_model
         self.protein_model = protein_model
-        self.multimodal_strategy = multimodal_strategy
         self.protein_layer_to_use = protein_layer_to_use
         self.perceiver_latent_size = perceiver_latent_size
         self.num_perceiver_layers = num_perceiver_layers
@@ -135,7 +133,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         info_ids: Tensor,
         attention_mask: Tensor,
         past_key_values: Optional[Tuple[Tuple[Tensor]]] = None,
-        labels: Optional[LongTensor] = None,
+        labels: Optional[Tensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -144,12 +142,17 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         """Add protein latents as word embedding to the beginning of the sentence."""
         with torch.no_grad():
             protein_embeddings = self.esm(protein_ids)
-        position_ids = torch.arange(
-            self.position_id_start, info_ids.size(1) + self.position_id_start, dtype=torch.long, device=self.device
-        )
+        if self.multimodal_strategy == "soft-prompt":
+            # Extend info_ids, labels and mask to accommodate for protein latents
+            prompt_size = (info_ids.size(0), self.perceiver_latent_size)
+            info_ids = torch.concat([info_ids.new_full(size=prompt_size, fill_value=0), info_ids], dim=1)
+            if labels is not None:
+                labels = torch.concat([labels.new_full(size=prompt_size, fill_value=-100), labels], dim=1)
+            attention_mask = torch.concat(
+                [attention_mask.new_full(size=prompt_size, fill_value=1), attention_mask], dim=1
+            )
         out = self.cprt_llm(
             input_ids=info_ids,
-            position_ids=position_ids.unsqueeze(0),
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             encoder_hidden_states=protein_embeddings,
@@ -159,8 +162,9 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        # adjust logits to remove soft-prompts if needed
-        out["logits"] = out["logits"][:, self.position_id_start :]
+        # remove logits of the protein latents
+        if self.multimodal_strategy == "soft-prompt":
+            out["logits"] = out["logits"][:, self.perceiver_latent_size :]
         return out
 
     def training_step(self, batch: CPrtData, batch_idx: int) -> Tensor:

@@ -67,13 +67,9 @@ class CPrtSoftPromptLayer(nn.Module):
             protein_latents = checkpoint(self.perceiver, encoder_hidden_states)
         else:
             protein_latents = self.perceiver(encoder_hidden_states)
-        mask_attend_value = int(attention_mask.view(-1)[0])
-        latents_attention_mask = attention_mask.new_full(
-            size=(attention_mask.shape[:-1] + protein_latents.shape[1:2]), fill_value=mask_attend_value
-        )
         return self.decoder(  # type: ignore[no-any-return]
-            torch.concat([protein_latents, hidden_states], dim=1),
-            attention_mask=torch.concat([latents_attention_mask, attention_mask], dim=-1),
+            torch.concat([protein_latents, hidden_states[:, protein_latents.size(1) :]], dim=1),
+            attention_mask=attention_mask,
             use_cache=use_cache,
             output_attentions=output_attentions,
             **kwargs,

@@ -6,6 +6,7 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
 from transformers import GPT2LMHeadModel
 from transformers.models.gpt2.modeling_gpt2 import GPT2Block
+from transformers.models.phi.modeling_phi import PhiDecoderLayer
 
 
 class GPT2CPrt(GPT2LMHeadModel):  # type: ignore[misc]
@@ -29,22 +30,22 @@ class CPrtCrossAttentionLayer(nn.Module):
     def __init__(
         self,
         protein_emb_dim: int,
-        decoder: GPT2Block,
+        text_emb_dim: int,
+        decoder: GPT2Block | PhiDecoderLayer,
+        num_decoder_heads: int,
         num_perceiver_heads: int,
         perceiver_latent_size: int,
         num_perceiver_layers: int,
         enable_gradient_checkpointing: bool,
+        dropout: float,
     ) -> None:
         super(CPrtCrossAttentionLayer, self).__init__()
-        text_emb_dim = decoder.attn.c_attn.weight.size(0)
-        dropout = decoder.attn.attn_dropout.p
         self.enable_gradient_checkpointing = enable_gradient_checkpointing
-
         self.protein_layer_norm = nn.LayerNorm(protein_emb_dim)
         self.perceiver = Perceiver(
             protein_emb_dim, perceiver_latent_size, text_emb_dim, num_perceiver_heads, num_perceiver_layers, dropout
         )
-        self.cross_attn = GatedCrossAttentionLayer(text_emb_dim, decoder.attn.num_heads, dropout)
+        self.cross_attn = GatedCrossAttentionLayer(text_emb_dim, num_decoder_heads, dropout)
         self.decoder = decoder
 
     def forward(
@@ -52,11 +53,15 @@ class CPrtCrossAttentionLayer(nn.Module):
         hidden_states: Tensor,
         attention_mask: Tensor,
         encoder_hidden_states: Tensor,
-        layer_past: Optional[Tuple[Tensor]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         **kwargs: Any,
     ) -> Union[Tuple[Tensor], Optional[Tuple[Tensor, Tuple[Tensor, ...]]]]:
+        """Forward with cross-attention.
+
+        kwargs maybe different between different models.
+        e.g. past_key_value in Phi vs layer_past in GPT2
+        """
         # TODO: implement this. Need to see how best to handle it for cross attention
         #   Note to self: In generation only the last token is passed to the model, so k, v must be cached
         assert use_cache is False, "use_cache not implemented yet."
@@ -65,18 +70,17 @@ class CPrtCrossAttentionLayer(nn.Module):
         assert encoder_hidden_states is not None
 
         encoder_hidden_states = self.protein_layer_norm(encoder_hidden_states)
+        # decoder starts with layernorm, so hidden states don't need layernorm here.
         if self.training and self.enable_gradient_checkpointing:
             protein_latents = checkpoint(self.perceiver, encoder_hidden_states)
             hidden_states = checkpoint(self.cross_attn, hidden_states, protein_latents)
         else:
             protein_latents = self.perceiver(encoder_hidden_states)
             hidden_states = self.cross_attn(hidden_states, protein_latents)
-        # decoder starts with layernorm, so hidden states don't need layernorm here.
+        # encoder_hidden_states will be ignored from here
         return self.decoder(  # type: ignore[no-any-return]
             hidden_states,
-            layer_past=layer_past,
             attention_mask=attention_mask,
-            encoder_hidden_states=None,
             use_cache=use_cache,
             output_attentions=output_attentions,
             **kwargs,
@@ -88,7 +92,7 @@ class CPrtDummyCrossAttention(nn.Module):
 
     def __init__(
         self,
-        decoder: GPT2Block,
+        decoder: GPT2Block | PhiDecoderLayer,
     ) -> None:
         super(CPrtDummyCrossAttention, self).__init__()
         self.decoder = decoder
@@ -98,17 +102,15 @@ class CPrtDummyCrossAttention(nn.Module):
         hidden_states: Tensor,
         attention_mask: Tensor,
         encoder_hidden_states: Tensor,
-        layer_past: Optional[Tuple[Tensor]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         **kwargs: Any,
     ) -> Union[Tuple[Tensor], Optional[Tuple[Tensor, Tuple[Tensor, ...]]]]:
-        """Use same input as CPrtCrossAttentionLayer, ignoring encoder_hidden_states."""
+        """Use same input as CPrtCrossAttentionLayer, just dropping the encoder_hidden_states."""
+        # encoder_hidden_states will be ignored from here
         return self.decoder(  # type: ignore[no-any-return]
             hidden_states,
-            layer_past=layer_past,
             attention_mask=attention_mask,
-            encoder_hidden_states=None,
             use_cache=use_cache,
             output_attentions=output_attentions,
             **kwargs,

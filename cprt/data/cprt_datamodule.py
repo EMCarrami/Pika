@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, GPT2Tokenizer
+from transformers import AutoTokenizer
 
 from cprt.data.cprt_torch_datasets import CPrtDataset, CPrtMetricDataset
 from cprt.data.data_utils import load_data_from_path, random_split_df
@@ -58,10 +58,13 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
 
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{protein_model}")
         self.protein_tokenizer.model_max_length = max_protein_length
-        self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
+        self.text_tokenizer = AutoTokenizer.from_pretrained(language_model)
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         self.max_text_length = max_text_length
-        self.placeholder_length = len(self.text_tokenizer(sequence_placeholder)["input_ids"])
+
+        # Duplicate text_tokenizer is to allow for parallel tokenization using fast tokenizers
+        _text_tokenizer = AutoTokenizer.from_pretrained(language_model, use_fast=False)
+        self.placeholder_length = len(_text_tokenizer(sequence_placeholder)["input_ids"])
         self.sequence_placeholder = sequence_placeholder
 
         if isinstance(data_field_names, str):

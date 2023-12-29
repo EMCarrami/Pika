@@ -8,11 +8,12 @@ from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
 from torch import LongTensor, Tensor
 from torchmetrics.text import Perplexity, ROUGEScore
-from transformers import GPT2Tokenizer
+from transformers import AutoTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from cprt.data.cprt_datamodule import CPrtData, CPrtMetricData
 from cprt.metrics.biochem_metrics import BiochemMetrics
+from cprt.model.adapted_phi_models import PhiCPrt
 from cprt.model.helper_modules import GPT2CPrt, TruncatedESM2
 
 
@@ -38,8 +39,17 @@ class BaseCPrtModel(LightningModule, ABC):  # type: ignore[misc]
         for param in self.esm.parameters():
             param.requires_grad = False
 
-        self.cprt_llm = GPT2CPrt.from_pretrained(language_model)
-        self.text_tokenizer = GPT2Tokenizer.from_pretrained(language_model)
+        self.text_tokenizer = AutoTokenizer.from_pretrained(language_model)
+        if "gpt2" in language_model:
+            self.cprt_llm = GPT2CPrt.from_pretrained(language_model)
+        elif "phi" in language_model:
+            self.cprt_llm = PhiCPrt.from_pretrained(language_model)
+        else:
+            raise ValueError(f"only gpt2 and microsoft/phi models are supported. {language_model} was given")
+        assert (
+            self.cprt_llm.transformer.gradient_checkpointing is False
+        ), "gradient_checkpointing in LLMs not supported as the order of args to the input cannot be guaranteed."
+        self.n_llm_layers = len(self.cprt_llm.transformer.h)
         for param in self.cprt_llm.parameters():
             param.requires_grad = False
 

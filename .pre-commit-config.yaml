@@ -17,6 +17,7 @@ repos:
     rev: 4.0.1
     hooks:
     - id: flake8
+      exclude: cprt/model/original_phi
       files: \.py$
       additional_dependencies: ['flake8-docstrings==1.6.0']
 
@@ -24,6 +25,7 @@ repos:
     rev: v1.5.1
     hooks:
     - id: mypy
+      exclude: cprt/model/original_phi
       args: [
         --strict,
         --install-types,

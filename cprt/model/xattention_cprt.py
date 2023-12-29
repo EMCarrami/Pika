@@ -26,35 +26,55 @@ class CrossAttentionCPrt(BaseCPrtModel):
         """Initialize language and protein encoders."""
         super(CrossAttentionCPrt, self).__init__(language_model, protein_model, protein_layer_to_use, lr, weight_decay)
         self.save_hyperparameters()
-        # correct layers_to_cross_attend
-        n_layers = len(self.cprt_llm.transformer.h)
-        if layers_to_cross_attend is None:
-            layers_to_cross_attend = list(range(n_layers))
-        assert (
-            isinstance(layers_to_cross_attend, list)
-            and all([isinstance(i, int) for i in layers_to_cross_attend])
-            and max(layers_to_cross_attend) < n_layers
-        ), "layers_to_cross_attend must be None or list[int]"
-        layers_to_cross_attend = [i if i >= 0 else n_layers + i for i in layers_to_cross_attend]
-        protein_emb_size = self.esm.embedding_dim
+        self._set_layers_to_cross_attend(layers_to_cross_attend)
+        self._add_cross_attention_layers_to_decoder(
+            perceiver_latent_size, num_perceiver_layers, enable_gradient_checkpointing
+        )
+
+    def _add_cross_attention_layers_to_decoder(
+        self,
+        perceiver_latent_size: int,
+        num_perceiver_layers: int,
+        enable_gradient_checkpointing: bool,
+    ) -> None:
+        """Add cross-attention layers or dummy ones when cross-attention not needed."""
+        protein_emb_dim = self.esm.embedding_dim
         protein_num_heads = self.esm.num_heads
-        # add cross-attention layers or dummy ones when cross-attention not needed
+        text_emb_dim = self.cprt_llm.config.n_embd
+        dropout = self.cprt_llm.config.attn_pdrop
+        num_decoder_heads = self.cprt_llm.config.n_head
+        decoder_layers = self.cprt_llm.transformer.h
+
         cross_attention_block = nn.ModuleList(
             [
                 CPrtCrossAttentionLayer(
-                    protein_emb_size,
+                    protein_emb_dim,
+                    text_emb_dim,
                     decoder,
+                    num_decoder_heads,
                     protein_num_heads,
                     perceiver_latent_size,
                     num_perceiver_layers,
                     enable_gradient_checkpointing,
+                    dropout,
                 )
-                if layer_id in layers_to_cross_attend
+                if layer_id in self.layers_to_cross_attend
                 else CPrtDummyCrossAttention(decoder)
-                for layer_id, decoder in enumerate(self.cprt_llm.transformer.h)
+                for layer_id, decoder in enumerate(decoder_layers)
             ]
         )
         self.cprt_llm.transformer.h = cross_attention_block
+
+    def _set_layers_to_cross_attend(self, layers_to_cross_attend: List[int] | None) -> None:
+        """Check, correct and set layers_to_cross_attend."""
+        if layers_to_cross_attend is None:
+            layers_to_cross_attend = list(range(self.n_llm_layers))
+        assert (
+            isinstance(layers_to_cross_attend, list)
+            and all([isinstance(i, int) for i in layers_to_cross_attend])
+            and max(layers_to_cross_attend) < self.n_llm_layers
+        ), "layers_to_cross_attend must be None or list[int]"
+        self.layers_to_cross_attend = [i if i >= 0 else self.n_llm_layers + i for i in layers_to_cross_attend]
 
     def forward(
         self,

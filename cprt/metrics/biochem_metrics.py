@@ -48,7 +48,7 @@ class BiochemMetrics(Metric):
                     self.metric_values.append(1 - abs(label - max(0, min(1, score))))
                     self.metric_names.append(name)
                     # NEW WAY
-                    pred_t = pred.translate(str.maketrans("", "", string.punctuation)).split()
+                    pred_t = [i.lower() for i in pred.translate(str.maketrans("", "", string.punctuation)).split()]
                     pos = "yes" in pred_t and "no" not in pred_t
                     neg = "no" in pred_t and "yes" not in pred_t
                     if (label == 1 and pos) or (label == 0 and neg):

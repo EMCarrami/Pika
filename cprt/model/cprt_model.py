@@ -249,6 +249,10 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         """Generate using input_ids and protein_embeddings as encoder_hidden_states."""
         self.eval()
         protein_embeddings = self.esm(protein_ids)
+        if self.multimodal_strategy == "soft-prompt":
+            info_ids = torch.concat(
+                [info_ids.new_full(size=(info_ids.size(0), self.perceiver_latent_size), fill_value=0), info_ids], dim=1
+            )
         out = []
         if torch.any(info_ids == self.text_tokenizer.eos_token_id):
             for question, protein in zip(info_ids, protein_embeddings):

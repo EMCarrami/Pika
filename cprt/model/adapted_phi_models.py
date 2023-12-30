@@ -59,12 +59,19 @@ class PhiCPrt(PhiForCausalLM):
         return CausalLMOutputWithPast(loss=loss, logits=lm_logits, past_key_values=past_key_values)
 
     def prepare_inputs_for_generation(
-        self, *args: Any, inputs_embeds: Tensor | None = None, **kwargs: Any
+        self,
+        input_ids: Tensor,
+        past_key_values: Tensor | None = None,  # type: ignore[override]
+        attention_mask: Tensor | None = None,
+        **kwargs: Any
     ) -> Dict[str, Any]:
-        """Add encoder_hidden_states to model_inputs of GPT2 generation for CPrt."""
-        model_inputs: Dict[str, Any] = super(PhiCPrt, self).prepare_inputs_for_generation(
-            *args, inputs_embeds=inputs_embeds, **kwargs
-        )
+        """Add encoder_hidden_states to model_inputs of Phi generation for CPrt."""
+        # TODO: fix generation optimization with past_key_values
+        model_inputs: Dict[str, Any] = {
+            "input_ids": input_ids,
+            "past_key_values": past_key_values,
+            "attention_mask": attention_mask,
+        }
         if kwargs.get("encoder_hidden_states", None) is not None:
             model_inputs["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
         return model_inputs

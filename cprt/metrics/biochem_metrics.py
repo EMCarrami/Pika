@@ -1,3 +1,4 @@
+import string
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
@@ -46,6 +47,16 @@ class BiochemMetrics(Metric):
                     # clamp the score between 0 and 1
                     self.metric_values.append(1 - abs(label - max(0, min(1, score))))
                     self.metric_names.append(name)
+                    # NEW WAY
+                    pred_t = pred.translate(str.maketrans("", "", string.punctuation)).split()
+                    pos = "yes" in pred_t and "no" not in pred_t
+                    neg = "no" in pred_t and "yes" not in pred_t
+                    if (label == 1 and pos) or (label == 0 and neg):
+                        self.metric_values.append(1)
+                    else:
+                        self.metric_values.append(0)
+                    self.metric_names.append(f"x{name}")
+
             elif isinstance(label, str):
                 if name == "kingdom":
                     # arch(aea), bact(eria), euka(ryota), viru(ses)
@@ -105,14 +116,24 @@ class BiochemMetrics(Metric):
             metric_out["aggregate_f1_localization"] = f1_score(loc_true, loc_pred, average="weighted")
 
         is_in, is_in_0 = [], []
+        xis_in, xis_in_0 = [], []
         for n, v in metric_out.items():
             if n.startswith("in_"):
                 if n.endswith("_0"):
                     is_in_0.append(v)
                 else:
                     is_in.append(v)
+            elif n.startswith("xin_"):
+                if n.endswith("_0"):
+                    xis_in_0.append(v)
+                else:
+                    xis_in.append(v)
         if is_in:
             metric_out["aggregate_semantic_location"] = sum(is_in) / len(is_in)
         if is_in_0:
             metric_out["aggregate_semantic_location_zero_shot_prompt"] = sum(is_in_0) / len(is_in_0)
+        if xis_in:
+            metric_out["aggregate_yes/no_location"] = sum(xis_in) / len(xis_in)
+        if xis_in_0:
+            metric_out["aggregate_yes/no_location_zero_shot_prompt"] = sum(xis_in_0) / len(xis_in_0)
         return metric_out

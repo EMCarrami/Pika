@@ -225,7 +225,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 self.val_example_outputs[f"{name}_{self.global_step}_{num}"] = {
                     "global_step": self.global_step,
                     "question": self.text_tokenizer.decode(batch.question[0], skip_special_tokens=True),
-                    "expected_answer": batch.expected_value[0],
+                    "expected_answer": str(batch.expected_value[0]),
                     "generated_response": output_text[0],
                 }
                 break

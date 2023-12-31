@@ -94,7 +94,7 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
         self.split_df = self.split_df.reset_index(drop=True)
 
         # add shuffled sequences for unreal proteins
-        unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] is False)]
+        unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] == False)]
         self.sequences |= {f"{uid}_unreal": shuffle_protein(self.sequences[uid]) for uid in unreal_ids["uniprot_id"]}
 
     def __len__(self) -> int:

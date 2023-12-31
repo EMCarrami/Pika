@@ -23,16 +23,10 @@ class BiochemMetrics(Metric):
     def update(self, predictions: List[str], labels: List[str | int | bool], metric_names: List[str]) -> None:
         """Update metric name and value states."""
         for pred, label, name in zip(predictions, labels, metric_names):
-            # remove punctuations from pred and make lower case
-            pred = pred.translate(str.maketrans("", "", string.punctuation)).lower()
-            if isinstance(label, int):
-                assert label > 0, "only positive int labels are supported"
-                # get the int of predicted size only if one numeric present in the pred else set to 0
-                pred_ints = [int(i) for i in pred.split() if i.isnumeric()]
-                pred_size = pred_ints[0] if len(pred_ints) == 1 else 0
-                epsilon = 1e-3
-                self.numeric_preds.append((f"{name}_error", abs(np.log10(pred_size / label + epsilon))))
-            elif isinstance(label, bool):
+            pred = pred.lower()
+            if isinstance(label, bool):
+                # remove all punctuations from pred
+                pred = pred.translate(str.maketrans("", "", string.punctuation))
                 has_yes = "yes" in pred.split()
                 has_no = "no" in pred.split()
                 is_pos = has_yes and not has_no
@@ -46,6 +40,15 @@ class BiochemMetrics(Metric):
                         self.numeric_preds.append((name, 1))
                     else:
                         self.numeric_preds.append((name, 0))
+            elif isinstance(label, int):
+                # remove common punctuations without affecting float values
+                pred = pred.replace(",", "").replace(";", "").replace(". ", " ").replace("!", "")
+                assert label > 0, f"only positive int labels are supported. {name}: {label} -> {pred}"
+                # get the int of predicted size only if one numeric present in the pred else set to 0
+                pred_ints = [int(i) for i in pred.split() if i.isnumeric()]
+                pred_size = pred_ints[0] if len(pred_ints) == 1 else 0
+                epsilon = 1e-3
+                self.numeric_preds.append((f"{name}_error", abs(np.log10(pred_size / label + epsilon))))
             elif isinstance(label, str):
                 label = label.lower()
                 if name == "kingdom":
@@ -74,7 +77,7 @@ class BiochemMetrics(Metric):
                     # TODO: use chemical entity prediction and molecule matching instead of string matching
                     if label != "none":
                         # assuming cofactors are labelled as a comma seperated string
-                        cofactors = [i.strip().lower() for i in label.split(",")]
+                        cofactors = [i.strip() for i in label.split(",")]
                         if any([i in pred for i in cofactors]):
                             self.numeric_preds.append((name, 1))
                         else:

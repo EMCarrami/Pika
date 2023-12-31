@@ -1,10 +1,8 @@
 import string
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
-import nltk
 import numpy as np
-from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.metrics import f1_score
 from torchmetrics import Metric
 
@@ -12,128 +10,103 @@ from torchmetrics import Metric
 class BiochemMetrics(Metric):
     """Class to compute biochemical metrics from textual output."""
 
-    metric_names: List[str]
-    metric_values: List[float]
-    kingdom_preds: List[Tuple[str, str]]
+    numeric_preds: List[Tuple[str, float]]
+    taxonomy_preds: List[Tuple[str, str]]
     localization_preds: List[Tuple[str, str]]
 
     def __init__(self, **kwargs: Any) -> None:
         super(BiochemMetrics, self).__init__(**kwargs)
-        nltk.download("vader_lexicon")
-        self.sia = SentimentIntensityAnalyzer()
-        self.sia_yes = self.sia.polarity_scores("Yes")["compound"]
-        self.sia_no = self.sia.polarity_scores("No")["compound"]
-        self.add_state("metric_names", [])
-        self.add_state("metric_values", [])
-        self.add_state("kingdom_preds", [])
+        self.add_state("numeric_preds", [])
+        self.add_state("taxonomy_preds", [])
         self.add_state("localization_preds", [])
 
-    def update(self, predictions: List[str], labels: List[str | int], metric_names: List[str]) -> None:
+    def update(self, predictions: List[str], labels: List[str | int | bool], metric_names: List[str]) -> None:
         """Update metric name and value states."""
         for pred, label, name in zip(predictions, labels, metric_names):
+            # remove punctuations from pred and make lower case
+            pred = pred.translate(str.maketrans("", "", string.punctuation)).lower()
             if isinstance(label, int):
-                if name in ["mw", "length"]:
-                    # get the int of predicted size only if one numeric present in the pred else set to 0
-                    p = [i.replace(",", "") for i in pred.split()]
-                    pnum = [i.isnumeric() for i in p]
-                    pred_size = abs(int(p[pnum.index(True)])) if sum(pnum) == 1 else 0
-                    pred_ratio = pred_size / label
-                    self.metric_values.append(abs(np.log10(pred_ratio + 0.001)))
-                    self.metric_names.append(f"{name}_error")
+                assert label > 0, "only positive int labels are supported"
+                # get the int of predicted size only if one numeric present in the pred else set to 0
+                pred_ints = [int(i) for i in pred.split() if i.isnumeric()]
+                pred_size = pred_ints[0] if len(pred_ints) == 1 else 0
+                epsilon = 1e-3
+                self.numeric_preds.append((f"{name}_error", abs(np.log10(pred_size / label + epsilon))))
+            elif isinstance(label, bool):
+                has_yes = "yes" in pred.split()
+                has_no = "no" in pred.split()
+                is_pos = has_yes and not has_no
+                is_neg = has_no and not has_yes
+                void_answer = not (has_yes or has_no)
+                if void_answer:
+                    self.numeric_preds.append((f"void_answer_rate_{name}", 1))
                 else:
-                    assert label in [0, 1]
-                    # normalise score between sia_yes and sia_no scores
-                    score = (self.sia.polarity_scores(pred)["compound"] - self.sia_no) / (self.sia_yes - self.sia_no)
-                    # clamp the score between 0 and 1
-                    self.metric_values.append(1 - abs(label - max(0, min(1, score))))
-                    self.metric_names.append(name)
-                    # NEW WAY
-                    pred_t = [i.lower() for i in pred.translate(str.maketrans("", "", string.punctuation)).split()]
-                    pos = "yes" in pred_t and "no" not in pred_t
-                    neg = "no" in pred_t and "yes" not in pred_t
-                    if (label == 1 and pos) or (label == 0 and neg):
-                        self.metric_values.append(1)
+                    self.numeric_preds.append((f"void_answer_rate_{name}", 0))
+                    if (label is True and is_pos) or (label is False and is_neg):
+                        self.numeric_preds.append((name, 1))
                     else:
-                        self.metric_values.append(0)
-                    self.metric_names.append(f"x{name}")
-
+                        self.numeric_preds.append((name, 0))
             elif isinstance(label, str):
+                label = label.lower()
                 if name == "kingdom":
-                    # arch(aea), bact(eria), euka(ryota), viru(ses)
-                    all_kingdoms = ["arch", "bact", "euka", "viru"]
-                    pk = [i in pred.lower() for i in all_kingdoms]
-                    pred_kingdom = all_kingdoms[pk.index(True)] if sum(pk) == 1 else "none"
-                    if label.lower()[:4] == pred_kingdom:
-                        self.metric_values.append(1)
-                    else:
-                        self.metric_values.append(0)
-                    self.metric_names.append(f"{name}_{label.lower()}")
-                    self.kingdom_preds.append((label.lower()[:4], pred_kingdom))
+                    if "virus" not in label:
+                        # only checking for the presence of first 4 letters
+                        # arch(aea), bact(eria), euka(ryota)
+                        all_kingdoms = [i for i in ["archaea", "bacteria", "eukaryota"] if i[:4] in pred]
+                        pred_kingdom = all_kingdoms[0] if len(all_kingdoms) == 1 else "none"
+                        if label == pred_kingdom:
+                            self.numeric_preds.append((f"{name}_{label}", 1))
+                        else:
+                            self.numeric_preds.append((f"{name}_{label}", 0))
+                        self.taxonomy_preds.append((label, pred_kingdom))
                 elif name == "localization":
-                    # membr(ane), nucle(us), mitoc(hondrion)
-                    all_locs = ["membr", "nucle", "mitoc"]
                     if label != "none":
-                        pl = [i in pred.lower() for i in all_locs]
-                        pred_loc = all_locs[pl.index(True)] if sum(pl) == 1 else "none"
-                        if label[:5] == pred_loc:
-                            self.metric_values.append(1)
+                        # only checking for the presence of first 5 letters
+                        # membr(ane), nucle(us), mitoc(hondrion)
+                        all_locs = [i for i in ["membrane", "nucleus", "mitochondrion"] if i[:5] in pred]
+                        pred_loc = all_locs[0] if len(all_locs) == 1 else "none"
+                        if label == pred_loc:
+                            self.numeric_preds.append((f"{name}_{label}", 1))
                         else:
-                            self.metric_values.append(0)
-                        self.metric_names.append(f"{name}_{label}")
-                        self.localization_preds.append((label[:5], pred_loc))
+                            self.numeric_preds.append((f"{name}_{label}", 0))
+                        self.localization_preds.append((label, pred_loc))
                 elif name == "cofactor":
+                    # TODO: use chemical entity prediction and molecule matching instead of string matching
                     if label != "none":
+                        # assuming cofactors are labelled as a comma seperated string
                         cofactors = [i.strip().lower() for i in label.split(",")]
-                        if any([i in pred.lower() for i in cofactors]):
-                            self.metric_values.append(1)
+                        if any([i in pred for i in cofactors]):
+                            self.numeric_preds.append((name, 1))
                         else:
-                            self.metric_values.append(0)
-                        self.metric_names.append(name)
+                            self.numeric_preds.append((name, 0))
                 else:
                     raise ValueError(
                         "currently only supports kingdom, cofactor and localization str metrics. "
                         f"value {label} for metric {name} was given"
                     )
             else:
-                raise ValueError(f"labels must be str or int, {label} was given.")
+                raise ValueError(f"labels must be int, bool or str. {label} was given.")
 
     def compute(self) -> Dict[str, float]:
         """Compute average metrics and aggregates."""
-        metric_counts: Dict[str, int] = defaultdict(int)
-        metric_sum: Dict[str, float] = defaultdict(float)
-        for n, v in zip(self.metric_names, self.metric_values):
-            metric_counts[n] += 1
-            metric_sum[n] += v
+        metrics: Dict[str, List[float]] = defaultdict(list)
+        for n, v in self.numeric_preds:
+            metrics[n].append(v)
         metric_out = {}
-        for n in metric_counts:
-            metric_out[n] = metric_sum[n] / metric_counts[n]
-
-        if len(self.kingdom_preds) > 0:
-            tax_true, tax_pred = zip(*self.kingdom_preds)
+        for n in metrics:
+            metric_out[n] = cast(float, np.mean(metrics[n]))
+        # Aggregate metrics
+        if len(self.taxonomy_preds) > 0:
+            tax_true, tax_pred = zip(*self.taxonomy_preds)
             metric_out["aggregate_f1_taxonomy"] = f1_score(tax_true, tax_pred, average="weighted")
         if len(self.localization_preds) > 0:
             loc_true, loc_pred = zip(*self.localization_preds)
             metric_out["aggregate_f1_localization"] = f1_score(loc_true, loc_pred, average="weighted")
-
-        is_in, is_in_0 = [], []
-        xis_in, xis_in_0 = [], []
+        # aggregating localization "polar questions", all starting with is_in
+        is_in = []
         for n, v in metric_out.items():
             if n.startswith("in_"):
-                if n.endswith("_0"):
-                    is_in_0.append(v)
-                else:
-                    is_in.append(v)
-            elif n.startswith("xin_"):
-                if n.endswith("_0"):
-                    xis_in_0.append(v)
-                else:
-                    xis_in.append(v)
+                is_in.append(v)
         if is_in:
-            metric_out["aggregate_semantic_location"] = sum(is_in) / len(is_in)
-        if is_in_0:
-            metric_out["aggregate_semantic_location_zero_shot_prompt"] = sum(is_in_0) / len(is_in_0)
-        if xis_in:
-            metric_out["aggregate_yes/no_location"] = sum(xis_in) / len(xis_in)
-        if xis_in_0:
-            metric_out["aggregate_yes/no_location_zero_shot_prompt"] = sum(xis_in_0) / len(xis_in_0)
+            metric_out["average_semantic_localization"] = cast(float, np.mean(is_in))
         return metric_out

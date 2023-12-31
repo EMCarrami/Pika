@@ -48,7 +48,7 @@ class CPrtDataset(Dataset[Tuple[str, str]]):
         return protein_sequence, info
 
 
-class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
+class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
     """Torch dataset class for biochem metrics."""
 
     def __init__(
@@ -67,11 +67,6 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param split: split name
         """
-        zero_shot_metrics = [
-            "in_membrane",
-            "in_nucleus",
-            "in_mitochondria",
-        ]
         self.question_mapping = {
             "is_real": "Is this the sequence of a real protein?",
             "is_enzyme": "Is this protein an enzyme?",
@@ -87,49 +82,33 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int]]):
         # "DNA_binding": "Does this protein bind to DNA?",
         # "RNA_binding": "Does this protein bind to RNA?",
         # "nucleic_acid_binding": "Does this protein bind nucleic acids?",
-        self.zero_shot_tag = "<0-shot-prompt>"
-        self.zero_shot_prompt = f"{self.question_mapping['is_real']} Yes. {self.question_mapping['is_enzyme']}"
         self.split = split
         self.split_df = metadata[metadata.split == self.split].drop("split", axis=1)
         self.sequences = {k: v for k, v in sequences.items() if k in self.split_df["uniprot_id"].to_list()}
 
-        for q in zero_shot_metrics:
-            self.question_mapping[f"{q}_0"] = f"{self.zero_shot_tag} {self.question_mapping[q]}"
-            self.split_df[f"{q}_0"] = self.split_df[q]
-
         self.split_df = self.split_df.melt(id_vars=["uniprot_id"], var_name="metric", value_name="value")
+        # Filter questions
         self.split_df = self.split_df[self.split_df["metric"].isin(self.question_mapping)]
-        self.split_df = self.split_df[~((self.split_df["metric"] == "cofactor") & (self.split_df["value"] == "none"))]
-        self.split_df = self.split_df[
-            ~((self.split_df["metric"] == "localization") & (self.split_df["value"] == "none"))
-        ]
+        self.split_df = self.split_df[self.split_df["value"] != "none"]
+        self.split_df = self.split_df[self.split_df["value"] != "Viruses"]
         self.split_df = self.split_df.reset_index(drop=True)
 
         # add shuffled sequences for unreal proteins
-        unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] == 0)]
+        unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] is False)]
         self.sequences |= {f"{uid}_unreal": shuffle_protein(self.sequences[uid]) for uid in unreal_ids["uniprot_id"]}
-
-        self.is_enzyme_dict = (
-            self.split_df[self.split_df.metric == "is_enzyme"]
-            .set_index("uniprot_id")["value"]
-            .map({1: "Yes.", 0: "No."})
-            .to_dict()
-        )
 
     def __len__(self) -> int:
         """Get dataset length."""
         return len(self.split_df)
 
-    def __getitem__(self, idx: int) -> Tuple[str, str, str, str | int]:
+    def __getitem__(self, idx: int) -> Tuple[str, str, str, str | int | bool]:
         """Get Cprt metric data for training."""
         uid, metric, value = self.split_df.iloc[idx]
-        if metric == "is_real" and value == 0:
+        if metric == "is_real" and value is False:
             protein_sequence = self.sequences[f"{uid}_unreal"]
         else:
             protein_sequence = self.sequences[uid]
         question = self.question_mapping[metric]
-        if question.startswith(self.zero_shot_tag):
-            question = question.replace(self.zero_shot_tag, f"{self.zero_shot_prompt} {self.is_enzyme_dict[uid]}")
         return protein_sequence, question, metric, value
 
 

@@ -1,3 +1,4 @@
+einops
 nltk
 pandas
 lightning==2.1.0

@@ -10,8 +10,8 @@ from transformers import AutoTokenizer
 from cprt.data.cprt_torch_datasets import CPrtDataset, CPrtMetricDataset
 from cprt.data.data_utils import load_data_from_path, random_split_df
 
-CPrtData = namedtuple("CPrtData", ["info", "info_mask", "protein", "labels"])
-CPrtMetricData = namedtuple("CPrtMetricData", ["info", "protein", "metric_name", "expected_value"])
+CPrtData = namedtuple("CPrtData", ["protein", "info", "info_mask", "labels"])
+CPrtMetricData = namedtuple("CPrtMetricData", ["protein", "question", "metric_name", "expected_value"])
 
 
 class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
@@ -100,7 +100,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         metrics_df.reset_index(inplace=True)
         metrics_df.rename(columns={"index": "uniprot_id"}, inplace=True)
         if use_unreal_proteins:
-            metrics_df["is_real"] = np.random.choice([0, 1], size=len(metrics_df))
+            metrics_df["is_real"] = np.random.choice([False, True], size=len(metrics_df))
         metrics_df = pd.merge(metrics_df, metadata[["uniprot_id", "split"]], on="uniprot_id")
         self.val_metric_dataset = CPrtMetricDataset(metrics_df, sequences, "val")
 
@@ -161,9 +161,9 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
             if pad_idx > 0:
                 labels[i, -pad_idx:] = -100
         return CPrtData(
+            protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             info=tokenized_info["input_ids"],
             info_mask=tokenized_info["attention_mask"],
-            protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             labels=labels,
         )
 
@@ -179,8 +179,8 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
             max_length=self.max_text_length,
         )
         return CPrtMetricData(
-            info=tokenized_questions["input_ids"],
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
+            question=tokenized_questions["input_ids"],
             metric_name=metric_list,
             expected_value=values,
         )

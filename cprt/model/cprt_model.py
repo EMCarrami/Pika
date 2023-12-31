@@ -1,4 +1,5 @@
 import gc
+from collections import OrderedDict
 from typing import Dict, List, Literal, Optional, Tuple, Type, cast
 
 import torch
@@ -69,6 +70,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         self.configure_metrics()
 
     def configure_protein_model(self) -> None:
+        """Configure ESM2 model."""
         esm, _ = torch.hub.load("facebookresearch/esm:main", self.protein_model)  # type: ignore[no-untyped-call]
         self.esm = TruncatedESM2(esm, self.protein_layer_to_use)
         self.esm.eval()
@@ -77,7 +79,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
 
     def configure_language_model(self) -> None:
         """Configure cprt_llm model and add cross-attention/soft-prompt/skip layers to the decoder."""
-        self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model)
+        self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model, use_fast=False)
         if "gpt2" in self.language_model:
             self.cprt_llm = GPT2CPrt.from_pretrained(self.language_model)
         elif "phi" in self.language_model:
@@ -87,6 +89,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         assert (
             self.cprt_llm.transformer.gradient_checkpointing is False
         ), "gradient_checkpointing in LLMs not supported as the order of args to the input cannot be guaranteed."
+
         for param in self.cprt_llm.parameters():
             param.requires_grad = False
 
@@ -200,27 +203,32 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 torch.argmax(out["logits"], dim=-1), skip_special_tokens=True
             )
             self.val_rouge_scores.update(generated_text, input_text)
-            if batch_idx == 0 and not self.trainer.sanity_checking:
-                self.log_example_outputs(input_text[-4:], batch.protein[-4:])
         else:
             assert isinstance(batch, CPrtMetricData)
-            out = self.generate(protein_ids=batch.protein, info_ids=batch.info, generation_length=20, keep_prompt=False)
+            out = self.get_response(
+                protein_ids=batch.protein, info_ids=batch.question, generation_length=20, keep_prompt=False
+            )
             self.val_biochem.update(out, batch.expected_value, batch.metric_name)
+            self.log_example_outputs(out, batch)
         torch.cuda.empty_cache()
         gc.collect()
 
-    def log_example_outputs(self, input_text: List[str], protein: Tensor) -> None:
-        """Log example generated responses."""
-        for in_txt, protein in zip(input_text, protein):
-            if "?" in in_txt:
-                question = in_txt.split("?")[0]
-                response = self.generate(
-                    protein_ids=protein.unsqueeze(0),
-                    info_ids=self.text_tokenizer(f"{question}? ", return_tensors="pt")["input_ids"].to(self.device),
-                    generation_length=25,
-                    keep_prompt=True,
-                )
-                self.text_table.add_data(self.trainer.global_step, in_txt, response)  # type: ignore[no-untyped-call]
+    def log_example_outputs(self, output_text: List[str], batch: CPrtMetricData) -> None:
+        """
+        Log example generated responses.
+
+        Logs up to two examples from each question type by checking the first examples in each batch
+        """
+        name = batch.metric_name[0]
+        for num in [1, 2]:
+            if f"{name}_{self.global_step}_{num}" not in self.val_example_outputs:
+                self.val_example_outputs[f"{name}_{self.global_step}_{num}"] = {
+                    "global_step": self.global_step,
+                    "question": self.text_tokenizer.decode(batch.question[0], skip_special_tokens=True),
+                    "expected_answer": batch.expected_value[0],
+                    "generated_response": output_text[0],
+                }
+                break
 
     def on_validation_epoch_end(self) -> None:
         """Log validation metrics."""
@@ -240,13 +248,31 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
     @rank_zero_only  # type: ignore[misc]
     def log_wandb_table(self) -> None:
         """Log wandb table of example outputs."""
-        wandb.log({"val_generation": self.text_table})
+        text_table = wandb.Table(  # type: ignore[no-untyped-call]
+            columns=["global_step", "question", "expected_answer", "generated_response"]
+        )
+        for v in self.val_example_outputs.values():
+            text_table.add_data(*v.values())  # type: ignore[no-untyped-call]
+        wandb.log({"val_generation": text_table})
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        """Configure optimizer."""
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        return optimizer
+
+    def configure_metrics(self) -> None:
+        """Configure metrics."""
+        self.train_perplexity = Perplexity(ignore_index=-100)
+        self.val_perplexity = Perplexity(ignore_index=-100)
+        self.val_rouge_scores = ROUGEScore()
+        self.val_biochem = BiochemMetrics()
+        self.val_example_outputs: Dict[str, Dict[str, str]] = OrderedDict()
 
     @torch.no_grad()
-    def generate(
+    def get_response(
         self, protein_ids: Tensor, info_ids: Tensor, generation_length: int = 20, keep_prompt: bool = False
     ) -> List[str]:
-        """Generate using input_ids and protein_embeddings as encoder_hidden_states."""
+        """Generate text using input_ids and protein_embeddings as encoder_hidden_states."""
         self.eval()
         protein_embeddings = self.esm(protein_ids)
         if self.multimodal_strategy == "soft-prompt":
@@ -278,18 +304,3 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             for pred in preds:
                 out.append(self.text_tokenizer.decode(pred[pos_offset:].cpu(), skip_special_tokens=True))
         return out
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """Configure optimizer."""
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        return optimizer
-
-    def configure_metrics(self) -> None:
-        """Configure metrics."""
-        self.train_perplexity = Perplexity(ignore_index=-100)
-        self.val_perplexity = Perplexity(ignore_index=-100)
-        self.val_rouge_scores = ROUGEScore()
-        self.val_biochem = BiochemMetrics()
-        self.text_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["global_step", "expected_answer", "generated_text"]
-        )

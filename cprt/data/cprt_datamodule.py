@@ -1,7 +1,6 @@
 from collections import namedtuple
 from typing import Dict, List, Tuple
 
-import numpy as np
 import pandas as pd
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader
@@ -26,7 +25,6 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         max_protein_length: int,
         max_text_length: int = 250,
         data_field_names: str | List[str] = "qa",
-        use_unreal_proteins: bool = False,
         sequence_placeholder: str = "<protein sequence placeholder> ",
         subsample_data: int | float = 1.0,
         train_batch_size: int = 4,
@@ -43,7 +41,6 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         :param max_protein_length: max length of protein allowed
         :param max_text_length: max length of text allowed
         :param data_field_names: name of data fields to use for training (must be present in data_dict)
-        :param use_unreal_proteins: whether to use shuffled proteins for training and metrics
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
                                 will be ignored in loss computation by setting label to -100
         :param subsample_data: ratio of the data or number of samples to process.
@@ -87,8 +84,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         # ending with 'yes_real' means the question is about real proteins.
         # the questions should be ignored when use_unreal_proteins == False
         data_fields: Dict[str, List[str]] = {
-            uid: [v for fn in data_field_names for v in fields[fn] if use_unreal_proteins or not v.endswith("yes_real")]
-            for uid, fields in data_dict.items()
+            uid: [v for fn in data_field_names for v in fields[fn]] for uid, fields in data_dict.items()
         }
         metadata.loc[:, "examples"] = metadata["uniprot_id"].apply(lambda x: data_fields[x])
         sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
@@ -99,8 +95,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")
         metrics_df.reset_index(inplace=True)
         metrics_df.rename(columns={"index": "uniprot_id"}, inplace=True)
-        if use_unreal_proteins:
-            metrics_df["is_real"] = np.random.choice([False, True], size=len(metrics_df))
+
         metrics_df = pd.merge(metrics_df, metadata[["uniprot_id", "split"]], on="uniprot_id")
         self.val_metric_dataset = CPrtMetricDataset(metrics_df, sequences, "val")
 

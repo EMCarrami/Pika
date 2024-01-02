@@ -1,5 +1,3 @@
-import argparse
-import json
 from datetime import datetime
 from typing import Any, Dict
 
@@ -13,6 +11,7 @@ from transformers import logging as transformers_logging
 from cprt.data.cprt_datamodule import CPrtDataModule
 from cprt.model.cprt_model import CPrtModel
 from cprt.utils import ROOT
+from cprt.utils.helpers import cli_parser
 
 transformers_logging.set_verbosity_error()
 
@@ -86,10 +85,5 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--log_to_wandb", type=bool, default=False)
-    args = parser.parse_args()
-
-    with open(f"{ROOT}/configs/train_config.json", "r") as f:
-        config: Dict[str, Any] = json.load(f)
-    train_cprt(config, log_to_wandb=args.log_to_wandb)
+    config = cli_parser()
+    train_cprt(config, log_to_wandb=config.pop("log_to_wandb", False))

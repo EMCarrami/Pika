@@ -314,8 +314,7 @@ class TruncatedESM2(nn.Module):
             self.embed_tokens = cast(nn.Module, pretrained_model.embed_tokens)
             num_layers = len(layers)
             if layer_to_keep < 0:
-                total_layers = num_layers
-                layer_to_keep = total_layers + layer_to_keep + 1
+                layer_to_keep = num_layers + layer_to_keep + 1
             assert 0 < layer_to_keep <= num_layers
             self.layers = nn.ModuleList([layers[i] for i in range(layer_to_keep)])
         elif layer_to_keep == "wte":

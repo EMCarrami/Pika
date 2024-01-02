@@ -29,7 +29,7 @@ class CPrtDataset(Dataset[Tuple[str, str]]):
         logger.info(f"preparing {split} dataset")
         self.split = split
         self.split_df = metadata[metadata.split == self.split][["uniprot_id", "examples"]]
-        self.sequences = {k: v for k, v in sequences.items() if k in self.split_df["uniprot_id"].to_list()}
+        self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
         self.split_df = self.split_df.explode("examples", ignore_index=True)
 
     def __len__(self) -> int:
@@ -93,7 +93,7 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
         self.split_df["is_real"] = np.random.choice([False, True], size=len(self.split_df))
         self.split_df["is_fake"] = self.split_df["is_real"].map(lambda x: not x)
         self.split_df["is_enzyme_hard"] = self.split_df["is_enzyme"]
-        self.sequences = {k: v for k, v in sequences.items() if k in self.split_df["uniprot_id"].to_list()}
+        self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
 
         self.split_df = self.split_df.melt(id_vars=["uniprot_id"], var_name="metric", value_name="value")
         # Filter questions

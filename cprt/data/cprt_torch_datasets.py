@@ -3,6 +3,7 @@ from typing import Dict, Literal, Tuple
 
 import numpy as np
 import pandas as pd
+from loguru import logger
 from torch.utils.data import Dataset
 
 
@@ -25,6 +26,7 @@ class CPrtDataset(Dataset[Tuple[str, str]]):
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param split: split name
         """
+        logger.info(f"preparing {split} dataset")
         self.split = split
         self.split_df = metadata[metadata.split == self.split][["uniprot_id", "examples"]]
         self.sequences = {k: v for k, v in sequences.items() if k in self.split_df["uniprot_id"].to_list()}
@@ -68,6 +70,7 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param split: split name
         """
+        logger.info(f"preparing {split} metrics dataset")
         self.question_mapping = {
             "is_real": "Is this the sequence of a real protein?",
             "is_fake": "Is this a fake protein?",

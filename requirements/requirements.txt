@@ -2,6 +2,7 @@ einops
 nltk
 pandas
 lightning==2.1.0
+loguru
 pytorch-lightning==2.1.0
 lightning-utilities==0.9.0
 scikit-learn

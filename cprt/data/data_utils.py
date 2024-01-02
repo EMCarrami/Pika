@@ -253,13 +253,16 @@ def load_data_from_path(data_path: str) -> Union[pd.DataFrame, Dict[str, Any]]:
         raise ValueError("only supports .csv and .pkl/.pickle files.")
 
 
-def random_split_df(df: pd.DataFrame, ratios: Sequence[float]) -> None:
+def random_split_df(df: pd.DataFrame, ratios: Sequence[float], key: str = "uniref_id") -> None:
     """Add split column values to df, inplace."""
     assert len(ratios) == 3 and sum(ratios) == 1, f"3 ratio values must sum to 1. {ratios} was given."
-    val_size, test_size = int(len(df) * ratios[1]), int(len(df) * ratios[2])
-    train_size = len(df) - val_size - test_size
+    assert key in df.columns, f"{key} is missing in df. Choose from {df.columns}"
+    id_list = df[key].unique()
+    val_size, test_size = int(len(id_list) * ratios[1]), int(len(df) * ratios[2])
+    train_size = len(id_list) - val_size - test_size
     split_array = np.array(
         ["train" for _ in range(train_size)] + ["val" for _ in range(val_size)] + ["test" for _ in range(test_size)]
     )
     np.random.shuffle(split_array)
-    df.loc[:, "split"] = split_array
+    split_mapper = {k: v for k, v in zip(id_list, split_array)}
+    df.loc[:, "split"] = df[key].map(split_mapper)

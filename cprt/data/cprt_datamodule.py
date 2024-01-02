@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 from lightning import LightningDataModule
+from loguru import logger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
@@ -66,26 +67,30 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         self.placeholder_length = len(_text_tokenizer(sequence_placeholder)["input_ids"])
         self.sequence_placeholder = sequence_placeholder
 
+        logger.info(f"loading {data_dict_path}")
         if isinstance(data_field_names, str):
             data_field_names = [data_field_names]
         data_dict = load_data_from_path(data_dict_path)
         metadata = pd.DataFrame(data_dict.keys(), columns=["uniprot_id"])
 
         if isinstance(subsample_data, float) or subsample_data == 1:
+            logger.info(f"{subsample_data * 100}% of {len(metadata)} samples will be used for analysis")
             metadata = metadata.sample(frac=subsample_data)
         elif isinstance(subsample_data, int):
+            logger.info(f"{subsample_data} of {len(metadata)} samples will be used for analysis")
             metadata = metadata.sample(n=subsample_data)
         else:
             raise ValueError(f"subsample_data must be int or float. {subsample_data} was given.")
 
         metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
+        metadata.loc[:, "uniref_id"] = metadata["uniprot_id"].apply(lambda x: data_dict[x]["uniref_id"])
         metadata = metadata[metadata["protein_length"] < max_protein_length]
         metadata = metadata[metadata["protein_length"] > min_protein_length]
         metadata.reset_index(drop=True, inplace=True)
-        random_split_df(metadata, split_ratios)
+        random_split_df(metadata, split_ratios, key="uniref_id")
 
-        # ending with 'yes_real' means the question is about real proteins.
-        # the questions should be ignored when use_unreal_proteins == False
+        # merge all data fields
+        logger.info("preparing examples")
         data_fields: Dict[str, List[str]] = {
             uid: [v for fn in data_field_names for v in fields[fn]] for uid, fields in data_dict.items()
         }

@@ -37,12 +37,8 @@ def process_id_mapping() -> None:
         else {if ($1 in A) print $0;}
         }' merged_filtered_processed_ids.tsv <(zcat idmapping_selected.tab.gz) > uniprot_to_uniref.tsv
     """
-    id_map = pd.read_csv(f"{DATA_PATH}/uniprot_to_uniref.tsv", sep="\t", header=None)[
-        [0, 7, 8, 9]
-    ]
-    id_map.rename(
-        columns={0: "id", 7: "uniref100", 8: "uniref90", 9: "uniref50"}, inplace=True
-    )
+    id_map = pd.read_csv(f"{DATA_PATH}/uniprot_to_uniref.tsv", sep="\t", header=None)[[0, 7, 8, 9]]
+    id_map.rename(columns={0: "id", 7: "uniref100", 8: "uniref90", 9: "uniref50"}, inplace=True)
     uniref90_dict, uniref50_dict = defaultdict(list), defaultdict(list)
     for _, row in tqdm(id_map.iterrows(), total=len(id_map)):
         uniref50_dict[row.uniref50].append(row.id)
@@ -79,11 +75,7 @@ def merge_clusters(uniref_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
                 # if main protein not a cluster, move it there if that protein is a member of another cluster.
                 for _k, _v in new_dict.items():
                     # base_cluster = Unirefxx_yyyyy
-                    if (
-                        base_cluster.split("_")[1] in _v
-                        and base_cluster not in _k
-                        and _k not in to_del
-                    ):
+                    if base_cluster.split("_")[1] in _v and base_cluster not in _k and _k not in to_del:
                         new_dict[_k] += v
                         to_del.append(k)
                         break
@@ -124,9 +116,7 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
     dataset = {}
     for uniref, uniprots in tqdm(uniref_dict.items()):
         # get data for valid uniprot_ids in cluster
-        df, cluster_rep_uid = get_uniref_cluster_data(
-            uniprots, uniref, all_uniprot_data
-        )
+        df, cluster_rep_uid = get_uniref_cluster_data(uniprots, uniref, all_uniprot_data)
 
         id_list = df["uniprot_id"].to_list()
         data_dicts = df["data_dict"].to_list()
@@ -140,15 +130,11 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
                 uid = id_list[idx]
                 dataset[uid] = data_dicts[idx]
                 length = len(data_dicts[idx]["sequence"][0])
-                add_line_to_csv(
-                    (uniref, uid, info_fields[idx], length, r + 1), out_file_name
-                )
+                add_line_to_csv((uniref, uid, info_fields[idx], length, r + 1), out_file_name)
         else:
             dataset[id_list[0]] = data_dicts[0]
             length = len(data_dicts[0]["sequence"][0])
-            add_line_to_csv(
-                (uniref, id_list[0], info_fields[0], length, 0), out_file_name
-            )
+            add_line_to_csv((uniref, id_list[0], info_fields[0], length, 0), out_file_name)
 
     with open(f"{DATA_PATH}/uniref{uniref_identity}_subsample_data.pkl", "wb") as f:
         pickle.dump(dataset, f)
@@ -176,23 +162,17 @@ def get_uniref_cluster_data(
     for uid in id_list:
         cluster_rep_uid = uid if uid in uniref_id else cluster_rep_uid
         info_dict = uniprot_data[uid]
-        assert (
-            isinstance(info_dict["sequence"], list) and len(info_dict["sequence"]) == 1
-        )
+        assert isinstance(info_dict["sequence"], list) and len(info_dict["sequence"]) == 1
 
         lengths.append(int(info_dict["length"][0]))
 
         # text of info_fields for gzip info
         info_fields = [k for k in info_dict if k in INFO_FIELDS]
-        text_data = "\n".join(
-            [f'{k}: {"; ".join(set(info_dict[k]))}' for k in info_fields]
-        )
+        text_data = "\n".join([f'{k}: {"; ".join(set(info_dict[k]))}' for k in info_fields])
         gzip_info = len(gzip.compress(text_data.encode()))
 
         # keep all fields for final data_dict (set to remove duplications)
-        data_dic: Dict[str, List[str] | str] = {
-            k: list(set(info_dict[k])) for k in info_fields
-        }
+        data_dic: Dict[str, List[str] | str] = {k: list(set(info_dict[k])) for k in info_fields}
         data_dic |= {k: info_dict[k] for k in BASE_FIELDS}
         data_dic["sequence"] = info_dict["sequence"][0]
 
@@ -223,9 +203,7 @@ def get_top_info_ids(
     id_list: List[str], text_data: List[str], gzip_info: List[int], cluster_rep_uid: str
 ) -> Tuple[int, int]:
     """Find the top ranking indices of data with highest gzip info."""
-    cluster_rep_idx = (
-        id_list.index(cluster_rep_uid) if cluster_rep_uid in id_list else None
-    )
+    cluster_rep_idx = id_list.index(cluster_rep_uid) if cluster_rep_uid in id_list else None
 
     rank1_idx = get_best_score_idx(gzip_info, cluster_rep_idx)
 
@@ -277,15 +255,11 @@ def load_data_from_path(data_path: str) -> Union[pd.DataFrame, Dict[str, Any]]:
 
 def random_split_df(df: pd.DataFrame, ratios: Sequence[float]) -> None:
     """Add split column values to df, inplace."""
-    assert (
-        len(ratios) == 3 and sum(ratios) == 1
-    ), f"3 ratio values must sum to 1. {ratios} was given."
+    assert len(ratios) == 3 and sum(ratios) == 1, f"3 ratio values must sum to 1. {ratios} was given."
     val_size, test_size = int(len(df) * ratios[1]), int(len(df) * ratios[2])
     train_size = len(df) - val_size - test_size
     split_array = np.array(
-        ["train" for _ in range(train_size)]
-        + ["val" for _ in range(val_size)]
-        + ["test" for _ in range(test_size)]
+        ["train" for _ in range(train_size)] + ["val" for _ in range(val_size)] + ["test" for _ in range(test_size)]
     )
     np.random.shuffle(split_array)
-    df["split"] = split_array
+    df.loc[:, "split"] = split_array

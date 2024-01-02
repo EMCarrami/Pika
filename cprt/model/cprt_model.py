@@ -241,7 +241,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         self.log_dict({f"biochem/val_{k}": v for k, v in biochem_scores.items()})
         self.val_biochem.reset()
 
-    def on_train_end(self) -> None:
+    def on_train_epoch_end(self) -> None:
         """Log generation examples table."""
         self.log_wandb_table()
 
@@ -253,7 +253,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         )
         for v in self.val_example_outputs.values():
             text_table.add_data(*v.values())  # type: ignore[no-untyped-call]
-        wandb.log({"val_generation": text_table})
+        wandb.log({f"val_generation_{self.current_epoch}": text_table})
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""

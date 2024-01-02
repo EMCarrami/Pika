@@ -2,7 +2,7 @@
   "seed": 7,
   "datamodule": {
     "data_dict_path": "uniref50_gpt_data.pkl",
-    "split_ratios": [0.88, 0.02, 0.1],
+    "split_ratios": [0.93, 0.02, 0.05],
     "max_protein_length": 1500,
     "max_text_length": 250,
     "data_field_names": "qa",
@@ -13,7 +13,7 @@
     "num_workers": 4
   },
   "model": {
-    "language_model": "gpt2-medium",
+    "language_model": "gpt2-xl",
     "protein_model": "esm2_t12_35M_UR50D",
     "multimodal_strategy": "cross-attention",
     "protein_layer_to_use": -1,
@@ -28,6 +28,7 @@
     "project": "Cprt-Paper"
   },
   "trainer": {
+    "save_checkpoints": ["loss", "f1"],
     "precision": "16-mixed",
     "n_vals_per_epoch": 5,
     "max_epochs": 5,

@@ -23,6 +23,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         protein_model: str,
         language_model: str,
         max_protein_length: int,
+        min_protein_length: int = 0,
         max_text_length: int = 250,
         data_field_names: str | List[str] = "qa",
         sequence_placeholder: str = "<protein sequence placeholder> ",
@@ -39,6 +40,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         :param protein_model: esm model to use for tokenizer
         :param language_model: language model to use for tokenizer
         :param max_protein_length: max length of protein allowed
+        :param min_protein_length: min protein length to use. Useful for debugging GPU OOM
         :param max_text_length: max length of text allowed
         :param data_field_names: name of data fields to use for training (must be present in data_dict)
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
@@ -78,6 +80,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
 
         metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
         metadata = metadata[metadata["protein_length"] < max_protein_length]
+        metadata = metadata[metadata["protein_length"] > min_protein_length]
         metadata.reset_index(drop=True, inplace=True)
         random_split_df(metadata, split_ratios)
 

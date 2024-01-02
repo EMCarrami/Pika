@@ -92,8 +92,8 @@ class BiochemMetrics(Metric):
         for n, v in c_metrics.items():
             actual, preds = zip(*v)
             all_labels = list(set(actual))
-            metric_out[f"f1_{n}"] = f1_score(actual, preds, average="macro", labels=all_labels)
-            metric_out[f"balanced_accuracy_{n}"] = balanced_accuracy_score(actual, preds)
+            metric_out[f"{n}_f1"] = f1_score(actual, preds, average="macro", labels=all_labels)
+            metric_out[f"{n}_balanced_accuracy"] = balanced_accuracy_score(actual, preds)
             # per class accuracies for non-yes/no questions: Taxonomy and Localization
             if "yes" not in all_labels:
                 class_recall = recall_score(actual, preds, average=None, labels=all_labels)

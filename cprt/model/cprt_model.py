@@ -83,7 +83,9 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         if "gpt2" in self.language_model:
             self.cprt_llm = GPT2CPrt.from_pretrained(self.language_model)
         elif "phi" in self.language_model:
-            self.cprt_llm = PhiCPrt.from_pretrained(self.language_model)
+            self.cprt_llm = PhiCPrt.from_pretrained(
+                self.language_model, flash_attn=True, flash_rotary=True, fused_dense=True
+            )
         else:
             raise ValueError(f"only gpt2 and microsoft/phi models are supported. {self.language_model} was given")
         assert (
@@ -101,8 +103,12 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         decoder_layers = self.cprt_llm.transformer.h
         n_llm_layers = len(decoder_layers)
         # assign which layers to make multimodal
-        if self.multimodal_layers == "all":
-            self.multimodal_layers = list(range(n_llm_layers))
+        if isinstance(self.multimodal_layers, str) and self.multimodal_layers.startswith("all"):
+            eliminate = self.multimodal_layers.split("-")
+            eliminate_list = []
+            if len(eliminate) > 1:
+                eliminate_list = [int(i) for i in eliminate[1].split(",")]
+            self.multimodal_layers = [i for i in range(n_llm_layers) if i not in eliminate_list]
         assert (
             isinstance(self.multimodal_layers, list)
             and all([isinstance(i, int) for i in self.multimodal_layers])

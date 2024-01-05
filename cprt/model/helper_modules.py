@@ -274,6 +274,31 @@ class GatedCrossAttentionLayer(nn.Module):
         return hidden_states
 
 
+class SelfCrossAttentionLayer(nn.Module):
+    """Cross and Self Attention."""
+
+    def __init__(self, emb_dim: int, num_heads: int, dropout: float) -> None:
+        super(SelfCrossAttentionLayer, self).__init__()
+        self.layer_norm = nn.LayerNorm(emb_dim)
+        self.cross_attn = nn.MultiheadAttention(emb_dim, num_heads, dropout=dropout, batch_first=True)
+        self.ffn = FeedForwardNetwork(emb_dim, dropout)
+
+    def forward(self, text_embs: Tensor, protein_latents: Tensor) -> Tensor:
+        """Cross attend from text to protein."""
+        residual = text_embs
+        text_embs = self.layer_norm(text_embs)
+        protein_text = torch.cat((text_embs, protein_latents), dim=-2)
+        attn_out, _ = self.cross_attn(
+            text_embs,
+            protein_text,
+            protein_text,
+        )
+        hidden_states = attn_out + residual
+        hidden_states = self.ffn(hidden_states)
+        hidden_states: Tensor = hidden_states + residual
+        return hidden_states
+
+
 class FeedForwardNetwork(nn.Module):
     """General FFN module."""
 
@@ -348,7 +373,7 @@ class TruncatedESM2(nn.Module):
 class PositionalEncoding1D(nn.Module):
     """Cosine positional encoding."""
 
-    def __init__(self, emb_dim: int, max_len: int = 1500) -> None:
+    def __init__(self, emb_dim: int, max_len: int = 2000) -> None:
         super(PositionalEncoding1D, self).__init__()
         position = torch.arange(max_len).unsqueeze(1).float()
 

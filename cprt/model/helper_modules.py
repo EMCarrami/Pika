@@ -125,10 +125,10 @@ class CPrtCrossAttentionLayer(nn.Module):
         # decoder starts with layernorm, so hidden states don't need layernorm here.
         if self.training and self.enable_gradient_checkpointing:
             protein_latents = checkpoint(self.perceiver, encoder_hidden_states)
-            hidden_states = checkpoint(self.cross_attn, hidden_states, protein_latents)
+            hidden_states = checkpoint(self.cross_attn, hidden_states, protein_latents, attention_mask)
         else:
             protein_latents = self.perceiver(encoder_hidden_states)
-            hidden_states = self.cross_attn(hidden_states, protein_latents)
+            hidden_states = self.cross_attn(hidden_states, protein_latents, attention_mask)
         # encoder_hidden_states will be ignored from here
         return self.decoder(  # type: ignore[no-any-return]
             hidden_states,
@@ -259,7 +259,7 @@ class GatedCrossAttentionLayer(nn.Module):
         self.ffn = FeedForwardNetwork(emb_dim, dropout)
         self.ff_gate = nn.Parameter(torch.tensor([0.0]))
 
-    def forward(self, text_embs: Tensor, protein_latents: Tensor) -> Tensor:
+    def forward(self, text_embs: Tensor, protein_latents: Tensor, attention_mask: Tensor) -> Tensor:
         """Cross attend from text to protein."""
         attn_out, _ = self.cross_attn(
             self.layer_norm(text_embs),
@@ -283,8 +283,13 @@ class SelfCrossAttentionLayer(nn.Module):
         self.cross_attn = nn.MultiheadAttention(emb_dim, num_heads, dropout=dropout, batch_first=True)
         self.ffn = FeedForwardNetwork(emb_dim, dropout)
 
-    def forward(self, text_embs: Tensor, protein_latents: Tensor) -> Tensor:
+    def forward(self, text_embs: Tensor, protein_latents: Tensor, attention_mask: Tensor) -> Tensor:
         """Cross attend from text to protein."""
+        mask_ext = torch.zeros((text_embs.size(0), protein_latents.size(1)), device=attention_mask.device).bool()
+        mask_p1 = torch.zeros((text_embs.size(1), protein_latents.size(1)), device=attention_mask.device).bool()
+        mask_p2 = torch.triu(
+            torch.ones((text_embs.size(1), text_embs.size(1)), device=attention_mask.device), diagonal=1
+        ).bool()
         residual = text_embs
         text_embs = self.layer_norm(text_embs)
         protein_text = torch.cat((text_embs, protein_latents), dim=-2)
@@ -292,6 +297,8 @@ class SelfCrossAttentionLayer(nn.Module):
             text_embs,
             protein_text,
             protein_text,
+            attn_mask=torch.cat((mask_p1, mask_p2), dim=1),
+            key_padding_mask=torch.cat((mask_ext, (attention_mask < 0).squeeze()), dim=1),
         )
         hidden_states = attn_out + residual
         hidden_states = self.ffn(hidden_states)

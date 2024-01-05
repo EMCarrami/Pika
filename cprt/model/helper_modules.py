@@ -292,13 +292,13 @@ class SelfCrossAttentionLayer(nn.Module):
         ).bool()
         residual = text_embs
         text_embs = self.layer_norm(text_embs)
-        protein_text = torch.cat((text_embs, protein_latents), dim=-2)
+        protein_text = torch.cat((protein_latents, text_embs), dim=-2)
         attn_out, _ = self.cross_attn(
             text_embs,
             protein_text,
             protein_text,
             attn_mask=torch.cat((mask_p1, mask_p2), dim=1),
-            key_padding_mask=torch.cat((mask_ext, (attention_mask < 0).squeeze()), dim=1),
+            key_padding_mask=torch.cat((mask_ext, (attention_mask < 0).squeeze((1, 2))), dim=1),
         )
         hidden_states = attn_out + residual
         hidden_states = self.ffn(hidden_states)

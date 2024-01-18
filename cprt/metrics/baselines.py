@@ -12,6 +12,8 @@ from cprt.metrics.biochem_metrics import BiochemMetrics
 from cprt.model.original_phi.modeling_phi import PhiForCausalLM
 from cprt.utils.helpers import load_config
 
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
 
 def get_random_baseline(config: Dict[str, Any]) -> None:
     """Compute metrics on randomly selected responses."""
@@ -61,7 +63,7 @@ def get_llm_only_baseline(config: Dict[str, Any]) -> None:
 
     if "gpt2" in config["model"]["language_model"]:
         text_tokenizer = AutoTokenizer.from_pretrained(config["model"]["language_model"], use_fast=False)
-        llm = GPT2LMHeadModel.from_pretrained(config["model"]["language_model"])
+        llm = GPT2LMHeadModel.from_pretrained(config["model"]["language_model"]).to(device)
     elif "phi" in config["model"]["language_model"]:
         text_tokenizer = AutoTokenizer.from_pretrained(
             config["model"]["language_model"], use_fast=False, revision="7e10f3ea09c0ebd373aebc73bc6e6ca58204628d"
@@ -72,7 +74,7 @@ def get_llm_only_baseline(config: Dict[str, Any]) -> None:
             flash_rotary=True,
             fused_dense=True,
             revision="7e10f3ea09c0ebd373aebc73bc6e6ca58204628d",
-        )
+        ).to(device)
     else:
         raise ValueError("only gpt2 and microsoft/phi-2 models are supported.")
 
@@ -81,7 +83,7 @@ def get_llm_only_baseline(config: Dict[str, Any]) -> None:
     llm.eval()
     with torch.no_grad():
         for batch in tqdm(datamodule.val_dataloader()[1]):
-            info_ids = batch.question
+            info_ids = batch.question.to(device)
             out = []
             if torch.any(info_ids == text_tokenizer.eos_token_id):
                 for question in info_ids:

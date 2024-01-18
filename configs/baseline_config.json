@@ -8,8 +8,8 @@
     "data_field_names": "qa",
     "sequence_placeholder": "<protein sequence placeholder> ",
     "subsample_data": 1.0,
-    "train_batch_size": 2,
-    "eval_batch_size": 8,
+    "train_batch_size": 8,
+    "eval_batch_size": 32,
     "num_workers": 4
   },
   "model": {

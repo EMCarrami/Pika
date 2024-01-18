@@ -79,12 +79,19 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
 
     def configure_language_model(self) -> None:
         """Configure cprt_llm model and add cross-attention/soft-prompt/skip layers to the decoder."""
-        self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model, use_fast=False)
         if "gpt2" in self.language_model:
+            self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model, use_fast=False)
             self.cprt_llm = GPT2CPrt.from_pretrained(self.language_model)
         elif "phi" in self.language_model:
+            self.text_tokenizer = AutoTokenizer.from_pretrained(
+                self.language_model, use_fast=False, revision="7e10f3ea09c0ebd373aebc73bc6e6ca58204628d"
+            )
             self.cprt_llm = PhiCPrt.from_pretrained(
-                self.language_model, flash_attn=True, flash_rotary=True, fused_dense=True
+                self.language_model,
+                flash_attn=True,
+                flash_rotary=True,
+                fused_dense=True,
+                revision="7e10f3ea09c0ebd373aebc73bc6e6ca58204628d",
             )
         else:
             raise ValueError(f"only gpt2 and microsoft/phi models are supported. {self.language_model} was given")

@@ -52,18 +52,21 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         :param num_workers: number of dataloader workers
         """
         super(CPrtDataModule, self).__init__()
+        rev = "main"
+        if "phi" in language_model:
+            rev = "7e10f3ea09c0ebd373aebc73bc6e6ca58204628d"
         self.num_workers = num_workers
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
 
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{protein_model}")
         self.protein_tokenizer.model_max_length = max_protein_length
-        self.text_tokenizer = AutoTokenizer.from_pretrained(language_model)
+        self.text_tokenizer = AutoTokenizer.from_pretrained(language_model, revision=rev)
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         self.max_text_length = max_text_length
 
         # Duplicate text_tokenizer is to allow for parallel tokenization using fast tokenizers
-        _text_tokenizer = AutoTokenizer.from_pretrained(language_model, use_fast=False)
+        _text_tokenizer = AutoTokenizer.from_pretrained(language_model, use_fast=False, revision=rev)
         self.placeholder_length = len(_text_tokenizer(sequence_placeholder)["input_ids"])
         self.sequence_placeholder = sequence_placeholder
 

@@ -24,7 +24,7 @@ from cprt.model.helper_modules import (
 
 
 class CPrtModel(LightningModule):  # type: ignore[misc]
-    """Abstract class of Cprt Lightning model."""
+    """CPrt Lightning model."""
 
     MultiModalLayer: Type[CPrtCrossAttentionLayer] | Type[CPrtSoftPromptLayer]
 
@@ -39,7 +39,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         multimodal_layers: List[int] | Literal["all"] = "all",
         enable_gradient_checkpointing: bool = False,
         lr: float = 1e-4,
-        weight_decay: float = 1e-2,
+        weight_decay: float = 1e-4,
     ) -> None:
         """Initialize language and protein encoders."""
         super(CPrtModel, self).__init__()
@@ -304,7 +304,9 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                     use_cache=False,
                     max_length=generation_length + prompt_len,
                 )
-                out.append(self.text_tokenizer.decode(preds[0, pos_offset:].cpu(), skip_special_tokens=True))
+                # fix for phi-2 tokenizer
+                txt = self.text_tokenizer.decode(preds[0, pos_offset:].cpu(), skip_special_tokens=False)
+                out.append(txt.split("<|endoftext|>")[0])
         else:
             prompt_len = info_ids.size(1)
             pos_offset = 0 if keep_prompt else prompt_len
@@ -315,5 +317,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 max_length=generation_length + prompt_len,
             )
             for pred in preds:
-                out.append(self.text_tokenizer.decode(pred[pos_offset:].cpu(), skip_special_tokens=True))
+                # fix for phi-2 tokenizer
+                txt = self.text_tokenizer.decode(pred[pos_offset:].cpu(), skip_special_tokens=False)
+                out.append(txt.split("<|endoftext|>")[0])
         return out

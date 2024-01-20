@@ -4,7 +4,7 @@ from torch import Tensor, nn
 from torchmetrics import F1Score, MeanAbsoluteError
 
 from cprt.data.classification_datamodule import ClassificationData
-from cprt.model.helper_modules import Perceiver, TruncatedESM2
+from cprt.model.helper_modules import Perceiver, Squeeze, TruncatedESM2
 
 
 class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
@@ -65,6 +65,7 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
             self.preprocess = lambda x: x
             self.classifier = nn.Sequential(
                 Perceiver(emb_dim, latent_size=1, output_dim=emb_dim, num_heads=num_heads, num_layers=1, dropout=0),
+                Squeeze(1),
                 nn.Linear(emb_dim, emb_dim // 2),
                 nn.GELU(),
                 nn.Linear(emb_dim // 2, num_classes),
@@ -77,7 +78,7 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
         return logits
 
     def general_step(self, batch: ClassificationData, mode: str) -> Tensor:
-        preds = self(batch.protein_ids)
+        preds = self(batch.protein_ids).squeeze(-1)
         loss: Tensor = self.criterion(preds, batch.labels)
         getattr(self, f"{mode}_metric").update(preds, batch.labels)
         self.log(f"loss/{mode}_loss", loss.item())

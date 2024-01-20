@@ -398,6 +398,13 @@ class PositionalEncoding1D(nn.Module):
         return x
 
 
-# TODO: Implement double-cross-attention:
-#   Latents query the "question" first to see what should be queried from protein.
-#   Then conditioned latents query the protein, which is then used for cross attention to the text for generation.
+class Squeeze(nn.Module):
+    """nn.Module for squeeze so that it can be added to Sequential."""
+
+    def __init__(self, dim: int) -> None:
+        super(Squeeze, self).__init__()
+        self.dim = dim
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Remove dim."""
+        return x.squeeze(self.dim)

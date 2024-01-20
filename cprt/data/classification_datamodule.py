@@ -84,7 +84,7 @@ class ClassificationDataModule(LightningDataModule):  # type: ignore[misc]
 
         if classification_task == "mw":
             self.num_classes = 1
-            metrics_df["class_id"] = np.log10(metrics_df[classification_task])
+            metrics_df["class_id"] = np.log10(metrics_df[classification_task]).astype(np.float32)
         else:
             metrics_df["class_id"], uniques = pd.factorize(metrics_df[classification_task])
             self.num_classes = len(uniques)

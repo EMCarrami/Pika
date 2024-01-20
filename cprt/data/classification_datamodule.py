@@ -81,14 +81,19 @@ class ClassificationDataModule(LightningDataModule):  # type: ignore[misc]
         metrics_df = metrics_df[metrics_df[classification_task] != "none"]
         metrics_df = metrics_df[metrics_df[classification_task] != "Viruses"]
         metrics_df = metrics_df.reset_index(drop=True)
-        metrics_df["class_id"], uniques = pd.factorize(metrics_df[classification_task])
+
+        if classification_task == "mw":
+            self.num_classes = 1
+            metrics_df["class_id"] = np.log10(metrics_df[classification_task])
+        else:
+            metrics_df["class_id"], uniques = pd.factorize(metrics_df[classification_task])
+            self.num_classes = len(uniques)
 
         metrics_df = metrics_df[["uniprot_id", "class_id", classification_task, "split"]]
-        self.num_classes = len(uniques)
 
         self.train_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "train")
-        self.val_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "train")
-        self.test_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "train")
+        self.val_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "val")
+        self.test_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "test")
 
     def train_dataloader(self) -> DataLoader:  # type: ignore[type-arg]
         """Set up train loader."""

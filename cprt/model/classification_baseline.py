@@ -3,10 +3,7 @@ from lightning import LightningModule
 from torch import Tensor, nn
 from torchmetrics import F1Score, MeanAbsoluteError
 
-from cprt.data.classification_datamodule import (
-    ClassificationData,
-    ClassificationDataModule,
-)
+from cprt.data.classification_datamodule import ClassificationData
 from cprt.model.helper_modules import Perceiver, TruncatedESM2
 
 
@@ -74,18 +71,15 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
             )
 
     def forward(self, input_ids: Tensor) -> Tensor:
-        embs = self.esm(input_ids)
+        with torch.no_grad():
+            embs = self.esm(input_ids)
         logits: Tensor = self.classifier(self.preprocess(embs))  # type: ignore[no-untyped-call]
         return logits
 
     def general_step(self, batch: ClassificationData, mode: str) -> Tensor:
         preds = self(batch.protein_ids)
-        if preds.size(-1) == 1:
-            loss: Tensor = self.criterion(torch.log10(preds), torch.log10(batch.labels))
-            getattr(self, f"{mode}_metric").update(torch.log10(preds), torch.log10(batch.labels))
-        else:
-            loss = self.criterion(preds, batch.labels)
-            getattr(self, f"{mode}_metric").update(preds, batch.labels)
+        loss: Tensor = self.criterion(preds, batch.labels)
+        getattr(self, f"{mode}_metric").update(preds, batch.labels)
         self.log(f"loss/{mode}_loss", loss.item())
         return loss
 
@@ -102,34 +96,9 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
         """Log validation metrics."""
         self.log("metrics/val_metric", self.val_metric.compute())
         self.val_metric.reset()
-
-    def on_train_epoch_end(self) -> None:
-        """Log train metrics."""
         self.log("metrics/train_metric", self.train_metric.compute())
         self.train_metric.reset()
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Configure optimizer."""
         return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-
-
-if __name__ == "__main__":
-    from lightning import Trainer
-
-    dm = ClassificationDataModule(
-        "uniref50_gpt_data_10pc_seed0.pkl",
-        (0.93, 0.02, 0.05),
-        "is_enzyme",
-        "esm2_t6_8M_UR50D",
-        1500,
-        num_workers=0,
-        train_batch_size=2,
-        eval_batch_size=2,
-    )
-    model = ProteinClassificationModel(
-        protein_model="esm2_t6_8M_UR50D", classifier="linear", num_classes=dm.num_classes
-    )
-
-    trainer = Trainer(max_epochs=2, devices=1)
-    trainer.fit(model, dm)
-    print(1)

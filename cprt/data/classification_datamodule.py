@@ -176,7 +176,7 @@ class ClassificationDataset(Dataset[Tuple[str, int]]):
     def __getitem__(self, idx: int) -> Tuple[str, int]:
         """Get classification data for training and eval."""
         uid, class_id, label = self.split_df.iloc[idx]
-        if self.make_unreal and label is False:
+        if self.make_unreal and label == False:
             protein_sequence = self.sequences[f"{uid}_unreal"]
         else:
             protein_sequence = self.sequences[uid]

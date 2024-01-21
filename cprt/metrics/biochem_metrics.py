@@ -32,7 +32,7 @@ class BiochemMetrics(Metric):
                     pred_class = "yes" if has_yes else "no"
                 else:
                     pred_class = "none"
-                label_class = "yes" if label is True else "no"
+                label_class = "yes" if label == True else "no"
                 self.class_preds.append((name, label_class, pred_class))
             elif isinstance(label, int):
                 # remove common punctuations without affecting float values

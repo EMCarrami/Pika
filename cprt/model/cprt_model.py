@@ -3,7 +3,6 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, cast
 
 import torch
-import wandb
 from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
 from torch import Tensor
@@ -12,6 +11,7 @@ from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import AutoTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+import wandb
 from cprt.data.cprt_datamodule import CPrtData, CPrtMetricData
 from cprt.metrics.biochem_metrics import BiochemMetrics
 from cprt.model.adapted_phi_models import PhiCPrt
@@ -228,6 +228,29 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             self.log_example_outputs(out, batch)
         torch.cuda.empty_cache()
         gc.collect()
+
+    def on_test_start(self) -> None:
+        """Create wandb table."""
+        self.test_table = wandb.Table(  # type: ignore[no-untyped-call]
+            columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
+        )
+
+    def test_step(self, batch: CPrtMetricData, batch_idx: int) -> None:
+        """Perform test on test_subjects."""
+        out = self.get_response(
+            protein_ids=batch.protein, info_ids=batch.question, generation_length=20, keep_prompt=False
+        )
+        for n, e, p in zip(batch.metric_name, batch.expected_value, out):
+            uid, s = n.split(": ")
+            self.test_table.add_data(uid, s, e, p)  # type: ignore[no-untyped-call]
+        torch.cuda.empty_cache()
+
+    def on_test_end(self) -> None:
+        """Log test outcomes to wandb."""
+        wandb.log({"test_results": self.test_table})
+        self.test_table = wandb.Table(  # type: ignore[no-untyped-call]
+            columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
+        )
 
     def log_example_outputs(self, output_text: List[str], batch: CPrtMetricData) -> None:
         """

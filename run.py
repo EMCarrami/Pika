@@ -1,13 +1,13 @@
 from datetime import datetime
 from typing import Any, Dict
 
-import wandb
 from lightning import Callback, Trainer
 from lightning.pytorch import seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from transformers import logging as transformers_logging
 
+import wandb
 from cprt.data.cprt_datamodule import CPrtDataModule
 from cprt.model.cprt_model import CPrtModel
 from cprt.utils import ROOT
@@ -41,9 +41,6 @@ def train_cprt(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     multimodal_strategy = config["model"]["multimodal_strategy"]
     model = CPrtModel(**config["model"])
 
-    if "n_vals_per_epoch" in config["trainer"]:
-        n_vals = config["trainer"].pop("n_vals_per_epoch")
-        config["trainer"]["val_check_interval"] = len(datamodule.train_dataloader()) // n_vals
     group_name = f"{multimodal_strategy}_{config['model']['protein_model']}_{config['model']['language_model']}"
     group_name = group_name.replace("/", "_")
 

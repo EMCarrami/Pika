@@ -1,0 +1,25 @@
+{
+  "seed": 42,
+  "datamodule": {
+    "test_subjects": ["temperature dependence", "pH dependence"],
+    "data_dict_path": "uniref50_gpt_data.pkl",
+    "split_ratios": [0.945, 0.005, 0.05],
+    "max_protein_length": 1500,
+    "max_text_length": 250,
+    "data_field_names": "qa",
+    "sequence_placeholder": "<protein sequence placeholder> ",
+    "subsample_data": 1.0,
+    "train_batch_size": 8,
+    "eval_batch_size": 32,
+    "num_workers": 8
+  },
+  "wandb": {
+    "project": "Cprt-Paper-Tests"
+  },
+  "trainer": {
+    "precision": "16-mixed",
+    "val_check_interval": 0.2,
+    "max_epochs": 1,
+    "devices": 1
+  }
+}

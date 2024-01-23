@@ -76,8 +76,8 @@ class CPrtTestDataset(Dataset[Tuple[str, str, str, str]]):
             "catalytic activity": "What chemical reaction is catalyzed by this protein?",
             # What is the catalytic activity of this protein?
             "cofactor": "What are the cofactors of this protein?",
-            "pH dependence": "What is the optimal pH ranges for this protein?",
-            "temperature dependence": "At what temperature does this protein keep its full activity?",
+            "taxonomy": "To what taxonomic group or organism does this protein belong?",
+            "functional domains": "What are the functional domains of this protein?",
         }
         self.question = question_mapping[subject]
         self.split_df = metadata[metadata.subjects == subject][["uniprot_id", "ground_truth"]]

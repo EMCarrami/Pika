@@ -37,7 +37,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         subsample_data: int | float = 1.0,
         train_batch_size: int = 4,
         eval_batch_size: int | None = None,
-        test_subjects: List[str] | None = None,
+        test_subjects: str | List[str] | None = None,
         num_workers: int = 4,
     ) -> None:
         """
@@ -57,7 +57,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         :param train_batch_size: train batch size
         :param eval_batch_size: size of val/test batch size. If unspecified will be 4 * train_batch_size
         :param test_subjects: scientific subjects for which tests must be performed.
-                        Supports: "catalytic activity", "cofactor", "pH dependence" or "temperature dependence".
+                        Supports: "reaction", "cofactor", "domains", "taxonomy" and "all"
                         Creates a test dataloader for each subject.
         :param num_workers: number of dataloader workers
         """
@@ -99,13 +99,15 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
 
         # prepare test sets if needed
         self.test_df = None
-        test_subjects = ["catalytic activity", "cofactor", "pH dependence", "temperature dependence"]
-        if test_subjects is not None:
-            allowed = ["catalytic activity", "cofactor", "pH dependence", "temperature dependence"]
-            assert all([i in allowed for i in test_subjects]), f"only {allowed} test_subjects are supported."
+        if self.test_subjects is not None:
+            allowed = ["catalytic activity", "reaction", "cofactor", "domains", "functional domains", "taxonomy"]
+            self.test_subjects = allowed if self.test_subjects == "all" else self.test_subjects
+            assert all([i in allowed for i in self.test_subjects]), f"only {allowed} test_subjects are supported."
+            map_subjects = {"reaction": "catalytic activity", "domains": "functional domains"}
+            self.test_subjects = list(set([map_subjects.get(i, i) for i in self.test_subjects]))
             self.test_df = metadata[metadata.split == "test"].copy()
             self.test_df["subjects"] = self.test_df["uniprot_id"].map(
-                lambda x: [i for i in data_dict[x]["fields"] if any([i.startswith(s) for s in test_subjects])]
+                lambda x: [i for i in data_dict[x]["fields"] if any([i.startswith(s) for s in self.test_subjects])]
             )
             self.test_df = self.test_df[self.test_df["subjects"].apply(lambda x: len(x) > 0)]
             self.test_df = self.test_df.explode("subjects", ignore_index=True)

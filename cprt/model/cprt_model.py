@@ -235,7 +235,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
         )
 
-    def test_step(self, batch: CPrtMetricData, batch_idx: int) -> None:
+    def test_step(self, batch: CPrtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Perform test on test_subjects."""
         out = self.get_response(
             protein_ids=batch.protein, info_ids=batch.question, generation_length=20, keep_prompt=False

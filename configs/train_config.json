@@ -2,7 +2,7 @@
   "seed": 7,
   "datamodule": {
     "data_dict_path": "uniref50_gpt_data.pkl",
-    "split_ratios": [0.93, 0.02, 0.05],
+    "split_ratios": [0.945, 0.005, 0.05],
     "max_protein_length": 1500,
     "max_text_length": 250,
     "data_field_names": "qa",
@@ -13,24 +13,24 @@
     "num_workers": 4
   },
   "model": {
-    "language_model": "gpt2-xl",
-    "protein_model": "esm2_t12_35M_UR50D",
-    "multimodal_strategy": "cross-attention",
+    "language_model": "microsoft/phi-2",
+    "protein_model": "esm2_t33_650M_UR50D",
+    "multimodal_strategy": "soft-prompt",
     "protein_layer_to_use": -1,
     "perceiver_latent_size": 100,
-    "num_perceiver_layers": 1,
-    "multimodal_layers": "all",
+    "num_perceiver_layers": 4,
+    "multimodal_layers": [0],
     "enable_gradient_checkpointing": false,
     "lr": 1e-4,
     "weight_decay": 1e-4
   },
   "wandb": {
-    "project": "Cprt-Paper"
+    "project": "Cprt-Paper-Exp-0"
   },
   "trainer": {
     "save_checkpoints": ["loss", "f1"],
     "precision": "16-mixed",
-    "n_vals_per_epoch": 5,
+    "val_check_interval": 0.2,
     "max_epochs": 5,
     "devices": 1
   }

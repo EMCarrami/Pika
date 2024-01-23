@@ -1,7 +1,11 @@
 {
   "seed": 42,
+  "checkpoint": {
+    "path": "model_checkpoints/epoch=0-step=224085.ckpt",
+    "is_partial": true
+  },
   "datamodule": {
-    "test_subjects": ["temperature dependence", "pH dependence"],
+    "test_subjects": "all",
     "data_dict_path": "uniref50_gpt_data.pkl",
     "split_ratios": [0.945, 0.005, 0.05],
     "max_protein_length": 1500,

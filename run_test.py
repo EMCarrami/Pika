@@ -1,9 +1,13 @@
+import csv
+import json
+import os.path
 from typing import Any, Dict, Tuple
 
 import torch
 from lightning import Trainer
 from lightning.pytorch import seed_everything
 from lightning.pytorch.loggers import WandbLogger
+from loguru import logger
 
 import wandb
 from cprt.data.cprt_datamodule import CPrtDataModule
@@ -16,18 +20,54 @@ device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cp
 def run_test(config: Dict[str, Any]) -> None:
     """Run test with pretrained model and log to wandb."""
     checkpoint = config["checkpoint"]["path"]
-    m, d = load_from_checkpoint(config, checkpoint, is_partial=config["checkpoint"].get("is_partial", False))
-    wandb_logger = WandbLogger(**config["wandb"])
-    trainer = Trainer(logger=wandb_logger, **config["trainer"])
-    trainer.logger.log_hyperparams(config)
-    trainer.test(m, d)
-    wandb.finish()
+    out_file = ""
+    if "save_file_path" in config:
+        out_file = config["save_file_path"]
+        if out_file == "auto":
+            save_dir = f"test_results/{config['model']['language_model']}_{config['model']['protein_model']}"
+            os.makedirs(save_dir, exist_ok=True)
+            file_name = checkpoint.split("/")[-1].split(".")[0]
+            out_file = f"{save_dir}/{file_name}.csv"
+        else:
+            assert out_file.endswith(".csv"), "only csv format is supported"
+            if len(out_file.split("/")) > 1:
+                assert not os.path.isfile(out_file), f"{out_file} already exists"
+                os.makedirs("/".join(out_file.split("/")[:-1]), exist_ok=True)
+            else:
+                out_file = f"test_results/{out_file}"
+                assert not os.path.isfile(out_file), f"{out_file} already exists"
+                os.makedirs("test_results", exist_ok=True)
+        logger.info(f"predicted texts will be saved in {out_file}")
+    model, data = load_from_checkpoint(config, checkpoint, is_partial=config["checkpoint"].get("is_partial", False))
+    if "wandb" in config:
+        wandb_logger = WandbLogger(**config["wandb"])
+        trainer = Trainer(logger=wandb_logger, **config["trainer"])
+        trainer.logger.log_hyperparams(config)
+    else:
+        trainer = Trainer(**config["trainer"])
+    trainer.test(model, data)
+    if out_file:
+        with open(out_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(("uniprot_id", "subject", "expected_answer", "generated_response"))
+            for row in model.test_results:
+                writer.writerow(row)
 
 
 def load_from_checkpoint(
     config: Dict[str, Any], checkpoint_path: str, is_partial: bool = False
 ) -> Tuple[CPrtModel, CPrtDataModule]:
     """Load model and datamodule from checkpoint and config."""
+    if os.path.isfile("model_checkpoints/model_checkpoints.json"):
+        with open("model_checkpoints/model_checkpoints.json", "r") as file:
+            checkpoints = json.load(file)
+
+    if checkpoint_path in checkpoints["path"]:
+        artifact_dir = find_wandb_checkpoint(checkpoints["path"][checkpoint_path])
+        checkpoint_path = f"{artifact_dir}/{checkpoint_path}"
+        config["seed"] = checkpoints["seed"][checkpoint_path]
+        logger.info(f"seed was automatically set to {config['seed']} for wandb model {checkpoint_path}")
+
     if is_partial:
         model = load_reduced_model(checkpoint_path)
     else:
@@ -39,6 +79,14 @@ def load_from_checkpoint(
         seed_everything(config["seed"])
     datamodule = CPrtDataModule(**config["datamodule"])
     return model, datamodule
+
+
+def find_wandb_checkpoint(checkpoint: str) -> str:
+    """Download the model artifact into model_checkpoints."""
+    api = wandb.Api()
+    artifact = api.artifact(checkpoint, type="model")  # type: ignore[no-untyped-call]
+    artifact_dir: str = artifact.download("model_checkpoints")
+    return artifact_dir
 
 
 def load_reduced_model(checkpoint_path: str) -> CPrtModel:

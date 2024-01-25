@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Type, cast
 
 import torch
 from lightning import LightningModule
+from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import rank_zero_only
 from torch import Tensor
 from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
@@ -231,26 +232,27 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
 
     def on_test_start(self) -> None:
         """Create wandb table."""
-        self.test_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
-        )
+        self.test_results: List[List[str]] = []
 
     def test_step(self, batch: CPrtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Perform test on test_subjects."""
         out = self.get_response(
-            protein_ids=batch.protein, info_ids=batch.question, generation_length=20, keep_prompt=False
+            protein_ids=batch.protein, info_ids=batch.question, generation_length=60, keep_prompt=False
         )
         for n, e, p in zip(batch.metric_name, batch.expected_value, out):
             uid, s = n.split(": ")
-            self.test_table.add_data(uid, s, e, p)  # type: ignore[no-untyped-call]
+            self.test_results.append([uid, s, e, p])
         torch.cuda.empty_cache()
 
     def on_test_end(self) -> None:
         """Log test outcomes to wandb."""
-        wandb.log({"test_results": self.test_table})
-        self.test_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
-        )
+        if isinstance(self.logger, WandbLogger):
+            test_table = wandb.Table(  # type: ignore[no-untyped-call]
+                columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
+            )
+            for v in self.test_results:
+                test_table.add_data(*v)  # type: ignore[no-untyped-call]
+            wandb.log({"test_results": test_table})
 
     def log_example_outputs(self, output_text: List[str], batch: CPrtMetricData) -> None:
         """
@@ -287,12 +289,13 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
     @rank_zero_only  # type: ignore[misc]
     def log_wandb_table(self) -> None:
         """Log wandb table of example outputs."""
-        text_table = wandb.Table(  # type: ignore[no-untyped-call]
-            columns=["global_step", "question", "expected_answer", "generated_response"]
-        )
-        for v in self.val_example_outputs.values():
-            text_table.add_data(*v.values())  # type: ignore[no-untyped-call]
-        wandb.log({f"val_generation_{self.current_epoch}": text_table})
+        if isinstance(self.logger, WandbLogger):
+            text_table = wandb.Table(  # type: ignore[no-untyped-call]
+                columns=["global_step", "question", "expected_answer", "generated_response"]
+            )
+            for v in self.val_example_outputs.values():
+                text_table.add_data(*v.values())  # type: ignore[no-untyped-call]
+            wandb.log({f"val_generation_{self.current_epoch}": text_table})
 
     def configure_optimizers(self) -> torch.optim.Optimizer | Dict[str, Any]:
         """Configure optimizer."""

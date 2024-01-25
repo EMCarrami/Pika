@@ -129,11 +129,11 @@ def subsample_clusters_by_gzip_score(uniref_identity: Literal["50", "90"]) -> No
             for r, idx in enumerate(top_ranks):
                 uid = id_list[idx]
                 dataset[uid] = data_dicts[idx]
-                length = len(data_dicts[idx]["sequence"][0])
+                length = len(data_dicts[idx]["sequence"])
                 add_line_to_csv((uniref, uid, info_fields[idx], length, r + 1), out_file_name)
         else:
             dataset[id_list[0]] = data_dicts[0]
-            length = len(data_dicts[0]["sequence"][0])
+            length = len(data_dicts[0]["sequence"])
             add_line_to_csv((uniref, id_list[0], info_fields[0], length, 0), out_file_name)
 
     with open(f"{DATA_PATH}/uniref{uniref_identity}_subsample_data.pkl", "wb") as f:
@@ -172,14 +172,15 @@ def get_uniref_cluster_data(
         gzip_info = len(gzip.compress(text_data.encode()))
 
         # keep all fields for final data_dict (set to remove duplications)
-        data_dic: Dict[str, List[str] | str] = {k: list(set(info_dict[k])) for k in info_fields}
-        data_dic |= {k: info_dict[k] for k in BASE_FIELDS}
-        data_dic["sequence"] = info_dict["sequence"][0]
+        data_dict: Dict[str, List[str] | str] = {k: list(set(info_dict[k])) for k in info_fields}
+        data_dict |= {k: info_dict[k] for k in BASE_FIELDS}
+        data_dict["sequence"] = info_dict["sequence"][0]
+        data_dict["uniref_id"] = uniref_id
 
         data_rows.append(
             (
                 uid,
-                data_dic,
+                data_dict,
                 ";".join(BASE_FIELDS + info_fields),
                 text_data,
                 gzip_info,

@@ -1,6 +1,12 @@
 {
-  "seed": 42,
+  "save_file_path": "auto",
+  "seed": "",
+  "checkpoint": {
+    "path": "nb30cnqt_dauntless-surf-44_e1_s358891.ckpt",
+    "is_partial": true
+  },
   "datamodule": {
+    "test_subjects": "all",
     "data_dict_path": "uniref50_gpt_data.pkl",
     "split_ratios": [0.945, 0.005, 0.05],
     "max_protein_length": 1500,
@@ -10,14 +16,13 @@
     "subsample_data": 1.0,
     "train_batch_size": 8,
     "eval_batch_size": 32,
-    "num_workers": 4
-  },
-  "model": {
-    "language_model": "gpt2-medium",
-    "protein_model": "esm2_t12_35M_UR50D",
-    "multimodal_strategy": "llm_only_baseline"
+    "num_workers": 8
   },
   "wandb": {
-    "project": "Cprt-Paper-Classification"
+    "project": "Cprt-Paper-Tests"
+  },
+  "trainer": {
+    "precision": "16-mixed",
+    "devices": 1
   }
 }

@@ -1,12 +1,12 @@
+import random
 from typing import Any, Dict, cast
 
-import numpy as np
 import torch
-import wandb
 from lightning.pytorch import seed_everything
 from tqdm import tqdm
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
+import wandb
 from cprt.data.cprt_datamodule import CPrtDataModule
 from cprt.metrics.biochem_metrics import BiochemMetrics
 from cprt.model.original_phi.modeling_phi import PhiForCausalLM
@@ -20,24 +20,17 @@ def get_random_baseline(config: Dict[str, Any]) -> None:
     if "seed" in config:
         seed_everything(config["seed"])
 
-    if "[seed]" in config["datamodule"]["data_dict_path"]:
-        config["datamodule"]["data_dict_path"] = config["datamodule"]["data_dict_path"].replace(
-            "[seed]", str(config["seed"])
-        )
-
     config["datamodule"]["language_model"] = config["model"]["language_model"]
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]
     datamodule = CPrtDataModule(**config["datamodule"])
 
-    bool_map = {True: "yes", False: "no"}
     metric = BiochemMetrics()
     df = datamodule.val_metric_dataset.split_df
     for n in df.metric.unique():
-        lbl = df[df.metric == n]["value"].to_numpy()
-        pred = np.copy(lbl)
-        np.random.shuffle(pred)
-        preds = [bool_map[i] if i in bool_map else str(i) for i in pred]
-        metric.update(preds, lbl.tolist(), [n] * len(lbl))
+        lbl = df[df.metric == n]["value"].to_list()
+        preds = [random.choice(["yes", "no"]) if isinstance(i, bool) else str(i) for i in lbl]
+        random.shuffle(preds)
+        metric.update(preds, lbl, [n] * len(lbl))
 
     config["wandb"]["group"] = "random_baseline"
     config["wandb"]["name"] = f"random_baseline_{config['seed']}"
@@ -51,11 +44,6 @@ def get_llm_only_baseline(config: Dict[str, Any]) -> None:
     config["datamodule"]["sequence_placeholder"] = ""
     if "seed" in config:
         seed_everything(config["seed"])
-
-    if "[seed]" in config["datamodule"]["data_dict_path"]:
-        config["datamodule"]["data_dict_path"] = config["datamodule"]["data_dict_path"].replace(
-            "[seed]", str(config["seed"])
-        )
 
     config["datamodule"]["language_model"] = config["model"]["language_model"]
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]

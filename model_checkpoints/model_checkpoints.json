@@ -1,0 +1,28 @@
+{
+    "path": {
+        "vd5nx0wu_serene-shadow-9_e1_s313723.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/serene-shadow-9_313723_model:v0",
+        "vd5nx0wu_serene-shadow-9_e0_s44817.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/serene-shadow-9_44817_model:v0",
+        "h95vdy7f_fresh-vortex-8_e0_s150312.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/fresh-vortex-8_150312_model:v0",
+        "fm9pxtkz_treasured-pyramid-5_e1_s216679.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/treasured-pyramid-5_216679_model:v0",
+        "vjfg92z9_polished-smoke-42_best_loss_step100840.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/polished-smoke-42_100840_model:v0",
+        "nb30cnqt_dauntless-surf-44_e1_s358891.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/dauntless-surf-44_358891_model:v0",
+        "9n7lc43f_solar-voice-33_e0_s150144.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/solar-voice-33_150144_model:v0",
+        "1xvwntxd_polished-monkey-31_e0_s224085.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/polished-monkey-31_224085_model:v0",
+        "pefb5f6v_legendary-glitter-15_e0_s156856.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/legendary-glitter-15_156856_model:v0",
+        "zaxd70u5_zany-spaceship-68_e0_s134526.ckpt": "eli-carrami/Cprt-Paper-Final/model_artifact_f1:v0",
+        "zaxd70u5_zany-spaceship-68_e0_s224210.ckpt": "eli-carrami/Cprt-Paper-Final/model_artifact_loss:v0"
+    },
+    "seed": {
+        "vd5nx0wu_serene-shadow-9_e1_s313723.ckpt": 7,
+        "vd5nx0wu_serene-shadow-9_e0_s44817.ckpt": 7,
+        "h95vdy7f_fresh-vortex-8_e0_s150312.ckpt": 42,
+        "fm9pxtkz_treasured-pyramid-5_e1_s216679.ckpt": 7,
+        "vjfg92z9_polished-smoke-42_best_loss_step100840.ckpt": 0,
+        "nb30cnqt_dauntless-surf-44_e1_s358891.ckpt": 7,
+        "9n7lc43f_solar-voice-33_e0_s150144.ckpt": 7,
+        "1xvwntxd_polished-monkey-31_e0_s224085.ckpt": 0,
+        "pefb5f6v_legendary-glitter-15_e0_s156856.ckpt": 7,
+        "zaxd70u5_zany-spaceship-68_e0_s134526.ckpt": 0,
+        "zaxd70u5_zany-spaceship-68_e0_s224210.ckpt": 0
+    }
+}

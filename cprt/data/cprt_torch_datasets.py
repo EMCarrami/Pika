@@ -15,6 +15,7 @@ class CPrtDataset(Dataset[Tuple[str, str]]):
         metadata: pd.DataFrame,
         sequences: Dict[str, str],
         split: Literal["train", "val", "test"],
+        subsample_data: float = 1.0,
     ) -> None:
         """
         Initialize dataset.
@@ -29,6 +30,9 @@ class CPrtDataset(Dataset[Tuple[str, str]]):
         logger.info(f"preparing {split} dataset")
         self.split = split
         self.split_df = metadata[metadata.split == self.split][["uniprot_id", "examples"]]
+        if subsample_data != 1:
+            logger.info(f"{subsample_data * 100}% of {len(metadata)} samples will be used for {split} split")
+            self.split_df = self.split_df.sample(frac=subsample_data)
         self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
         self.split_df = self.split_df.explode("examples", ignore_index=True)
 
@@ -49,6 +53,45 @@ class CPrtDataset(Dataset[Tuple[str, str]]):
                 protein_sequence = shuffle_protein(protein_sequence)
                 info = info.replace("yes_real", "No")
         return protein_sequence, info
+
+
+class CPrtTestDataset(Dataset[Tuple[str, str, str, str]]):
+    """CPrt test torch dataset."""
+
+    def __init__(self, metadata: pd.DataFrame, sequences: Dict[str, str], subject: str) -> None:
+        """
+        Initialize dataset.
+
+        :param metadata: must at least contain three columns:
+                            - uniprot_id
+                            - subjects: name of the subject
+                            - ground_truth: true answer to the subject of test
+                            - split: name of the split the uniprot_id belongs
+        :param sequences: dict of uniprot_ids mapped to the sequence
+        :param subject: test subject
+        """
+        logger.info(f"preparing test dataset for {subject}")
+        self.subject = subject
+        question_mapping = {
+            "catalytic activity": "What chemical reaction is catalyzed by this protein?",
+            # What is the catalytic activity of this protein?
+            "cofactor": "What are the cofactors of this protein?",
+            "taxonomy": "To what taxonomic group or organism does this protein belong?",
+            "functional domains": "What are the functional domains of this protein?",
+        }
+        self.question = question_mapping[subject]
+        self.split_df = metadata[metadata.subjects == subject][["uniprot_id", "ground_truth"]]
+        self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
+
+    def __len__(self) -> int:
+        """Get dataset length."""
+        return len(self.split_df)
+
+    def __getitem__(self, idx: int) -> Tuple[str, str, str, str]:
+        """Get Cprt data for training."""
+        uid, answer = self.split_df.iloc[idx]
+        protein_sequence = self.sequences[uid]
+        return protein_sequence, self.question, f"{uid}: {self.subject}", answer
 
 
 class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
@@ -84,10 +127,6 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
             "cofactor": "What is a cofactor of this protein?",
             "mw": "What is the molecular weight of this protein?",
         }
-        # "length": "What is the length of this protein?",
-        # "DNA_binding": "Does this protein bind to DNA?",
-        # "RNA_binding": "Does this protein bind to RNA?",
-        # "nucleic_acid_binding": "Does this protein bind nucleic acids?",
         self.split = split
         self.split_df = metadata[metadata.split == self.split].drop("split", axis=1)
         self.split_df["is_real"] = np.random.choice([False, True], size=len(self.split_df))
@@ -113,7 +152,7 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
     def __getitem__(self, idx: int) -> Tuple[str, str, str, str | int | bool]:
         """Get Cprt metric data for training."""
         uid, metric, value = self.split_df.iloc[idx]
-        if (metric == "is_real" and value is False) or (metric == "is_fake" and value is True):
+        if (metric == "is_real" and value == False) or (metric == "is_fake" and value == True):
             protein_sequence = self.sequences[f"{uid}_unreal"]
         else:
             protein_sequence = self.sequences[uid]

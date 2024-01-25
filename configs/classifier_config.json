@@ -1,0 +1,27 @@
+{
+  "seed": 0,
+  "datamodule": {
+    "data_dict_path": "uniref50_gpt_data.pkl",
+    "split_ratios": [0.945, 0.005, 0.05],
+    "classification_task": "is_enzyme",
+    "max_protein_length": 1500,
+    "train_batch_size": 32,
+    "eval_batch_size": 128,
+    "num_workers": 4
+  },
+  "model": {
+    "protein_model": "esm2_t33_650M_UR50D",
+    "classifier": "linear",
+    "protein_layer_to_use": -1,
+    "lr": 1e-4,
+    "weight_decay": 1e-4
+  },
+  "wandb": {
+    "project": "Cprt-Paper-Classification"
+  },
+  "trainer": {
+    "val_check_interval": 0.1,
+    "max_epochs": 1,
+    "devices": 1
+  }
+}

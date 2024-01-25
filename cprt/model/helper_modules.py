@@ -396,8 +396,3 @@ class PositionalEncoding1D(nn.Module):
         """Add positional encoding to each element in the batch."""
         x = x + self.pe[:, : x.size(1)]  # type: ignore[index]
         return x
-
-
-# TODO: Implement double-cross-attention:
-#   Latents query the "question" first to see what should be queried from protein.
-#   Then conditioned latents query the protein, which is then used for cross attention to the text for generation.

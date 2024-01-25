@@ -7,7 +7,11 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from cprt.data.cprt_torch_datasets import CPrtDataset, CPrtMetricDataset
+from cprt.data.cprt_torch_datasets import (
+    CPrtDataset,
+    CPrtMetricDataset,
+    CPrtTestDataset,
+)
 from cprt.data.data_utils import load_data_from_path, random_split_df
 
 CPrtData = namedtuple("CPrtData", ["protein", "info", "info_mask", "labels"])
@@ -16,6 +20,8 @@ CPrtMetricData = namedtuple("CPrtMetricData", ["protein", "question", "metric_na
 
 class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
     """Data module and collator for CPrtData."""
+
+    test_df: pd.DataFrame | None
 
     def __init__(
         self,
@@ -31,6 +37,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         subsample_data: int | float = 1.0,
         train_batch_size: int = 4,
         eval_batch_size: int | None = None,
+        test_subjects: str | List[str] | None = None,
         num_workers: int = 4,
     ) -> None:
         """
@@ -49,6 +56,9 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         :param subsample_data: ratio of the data or number of samples to process.
         :param train_batch_size: train batch size
         :param eval_batch_size: size of val/test batch size. If unspecified will be 4 * train_batch_size
+        :param test_subjects: scientific subjects for which tests must be performed.
+                        Supports: "reaction", "cofactor", "domains", "taxonomy" and "all"
+                        Creates a test dataloader for each subject.
         :param num_workers: number of dataloader workers
         """
         super(CPrtDataModule, self).__init__()
@@ -58,6 +68,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         self.num_workers = num_workers
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
+        self.test_subjects = test_subjects
 
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{protein_model}")
         self.protein_tokenizer.model_max_length = max_protein_length
@@ -74,17 +85,11 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         if isinstance(data_field_names, str):
             data_field_names = [data_field_names]
         data_dict = load_data_from_path(data_dict_path)
+        sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
+
         metadata = pd.DataFrame(data_dict.keys(), columns=["uniprot_id"])
-
-        if isinstance(subsample_data, float) or subsample_data == 1:
-            logger.info(f"{subsample_data * 100}% of {len(metadata)} samples will be used for analysis")
-            metadata = metadata.sample(frac=subsample_data)
-        elif isinstance(subsample_data, int):
-            logger.info(f"{subsample_data} of {len(metadata)} samples will be used for analysis")
-            metadata = metadata.sample(n=subsample_data)
-        else:
-            raise ValueError(f"subsample_data must be int or float. {subsample_data} was given.")
-
+        # TODO: remove after experiments
+        metadata = metadata.sample(frac=1.0)
         metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
         metadata.loc[:, "uniref_id"] = metadata["uniprot_id"].apply(lambda x: data_dict[x]["uniref_id"])
         metadata = metadata[metadata["protein_length"] < max_protein_length]
@@ -92,16 +97,31 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         metadata.reset_index(drop=True, inplace=True)
         random_split_df(metadata, split_ratios, key="uniref_id")
 
-        # merge all data fields
+        # prepare test sets if needed
+        self.test_df = None
+        if self.test_subjects is not None:
+            allowed = ["catalytic activity", "reaction", "cofactor", "domains", "functional domains", "taxonomy"]
+            self.test_subjects = allowed if self.test_subjects == "all" else self.test_subjects
+            assert all([i in allowed for i in self.test_subjects]), f"only {allowed} test_subjects are supported."
+            map_subjects = {"reaction": "catalytic activity", "domains": "functional domains"}
+            self.test_subjects = list(set([map_subjects.get(i, i) for i in self.test_subjects]))
+            self.test_df = metadata[metadata.split == "test"].copy()
+            self.test_df["subjects"] = self.test_df["uniprot_id"].map(
+                lambda x: [i for i in data_dict[x]["fields"] if any([i.startswith(s) for s in self.test_subjects])]
+            )
+            self.test_df = self.test_df[self.test_df["subjects"].apply(lambda x: len(x) > 0)]
+            self.test_df = self.test_df.explode("subjects", ignore_index=True)
+            self.test_df[["subjects", "ground_truth"]] = self.test_df["subjects"].str.split(":", n=1, expand=True)
+            self.test_sequences = {k: sequences[k] for k in self.test_df["uniprot_id"]}
+
+        # merge all data fields for train and val sets
         logger.info("preparing examples")
         data_fields: Dict[str, List[str]] = {
             uid: [v for fn in data_field_names for v in fields[fn]] for uid, fields in data_dict.items()
         }
         metadata.loc[:, "examples"] = metadata["uniprot_id"].apply(lambda x: data_fields[x])
-        sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
-        self.train_dataset = CPrtDataset(metadata, sequences, "train")
+        self.train_dataset = CPrtDataset(metadata, sequences, "train", subsample_data)
         self.val_dataset = CPrtDataset(metadata, sequences, "val")
-        self.test_dataset = CPrtDataset(metadata, sequences, "test")
 
         metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")
         metrics_df.reset_index(inplace=True)
@@ -140,14 +160,21 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
             ),
         )
 
-    def test_dataloader(self) -> DataLoader:  # type: ignore[type-arg]
-        """Set up test loader."""
-        return DataLoader(
-            self.test_dataset,
-            batch_size=self.eval_batch_size,
-            shuffle=False,
-            collate_fn=self.data_collate_fn,
-            num_workers=self.num_workers,
+    def test_dataloader(self) -> Tuple[DataLoader, ...]:  # type: ignore[type-arg]
+        """Set up a test dataloader for each test_subject."""
+        assert (
+            self.test_subjects is not None and self.test_df is not None and len(self.test_df) > 0
+        ), "test_subjects must be provided for test_dataloader"
+        return tuple(
+            [
+                DataLoader(
+                    CPrtTestDataset(self.test_df, self.test_sequences, subject),
+                    batch_size=self.eval_batch_size,
+                    collate_fn=self.metric_collate_fn,
+                    num_workers=self.num_workers,
+                )
+                for subject in self.test_subjects
+            ]
         )
 
     def data_collate_fn(self, batch: List[Tuple[str, str]]) -> CPrtData:

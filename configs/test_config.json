@@ -1,7 +1,8 @@
 {
-  "seed": 42,
+  "save_file_path": "auto",
+  "seed": "",
   "checkpoint": {
-    "path": "model_checkpoints/epoch=0-step=224085.ckpt",
+    "path": "nb30cnqt_dauntless-surf-44_e1_s358891.ckpt",
     "is_partial": true
   },
   "datamodule": {
@@ -22,8 +23,6 @@
   },
   "trainer": {
     "precision": "16-mixed",
-    "val_check_interval": 0.2,
-    "max_epochs": 1,
     "devices": 1
   }
 }

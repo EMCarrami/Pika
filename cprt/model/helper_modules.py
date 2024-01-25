@@ -396,15 +396,3 @@ class PositionalEncoding1D(nn.Module):
         """Add positional encoding to each element in the batch."""
         x = x + self.pe[:, : x.size(1)]  # type: ignore[index]
         return x
-
-
-class Squeeze(nn.Module):
-    """nn.Module for squeeze so that it can be added to Sequential."""
-
-    def __init__(self, dim: int) -> None:
-        super(Squeeze, self).__init__()
-        self.dim = dim
-
-    def forward(self, x: Tensor) -> Tensor:
-        """Remove dim."""
-        return x.squeeze(self.dim)

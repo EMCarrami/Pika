@@ -1,10 +1,12 @@
+from typing import Literal
+
 import torch
 from lightning import LightningModule
 from torch import Tensor, nn
 from torchmetrics import F1Score, MeanAbsoluteError
 
 from cprt.data.classification_datamodule import ClassificationData
-from cprt.model.helper_modules import Perceiver, Squeeze, TruncatedESM2
+from cprt.model.helper_modules import TruncatedESM2
 
 
 class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
@@ -16,7 +18,7 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
     def __init__(
         self,
         protein_model: str,
-        classifier: str,
+        classifier: Literal["mlp", "linear"],
         num_classes: int,
         protein_layer_to_use: int = -1,
         lr: float = 1e-4,
@@ -47,13 +49,10 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
             param.requires_grad = False
 
         emb_dim = self.esm.embedding_dim
-        num_heads = self.esm.num_heads
 
         if classifier == "linear":
-            self.preprocess = lambda x: x[:, 0]
             self.classifier = nn.Linear(emb_dim, num_classes)
         elif classifier == "mlp":
-            self.preprocess = lambda x: x[:, 0]
             self.classifier = nn.Sequential(
                 nn.Linear(emb_dim, emb_dim // 2),
                 nn.GELU(),
@@ -61,20 +60,13 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
                 nn.GELU(),
                 nn.Linear(emb_dim // 4, num_classes),
             )
-        elif classifier == "perceiver":
-            self.preprocess = lambda x: x
-            self.classifier = nn.Sequential(
-                Perceiver(emb_dim, latent_size=1, output_dim=emb_dim, num_heads=num_heads, num_layers=1, dropout=0),
-                Squeeze(1),
-                nn.Linear(emb_dim, emb_dim // 2),
-                nn.GELU(),
-                nn.Linear(emb_dim // 2, num_classes),
-            )
+        else:
+            raise ValueError(f"Only mlp and linear classifiers are supported. {classifier} was given.")
 
     def forward(self, input_ids: Tensor) -> Tensor:
         with torch.no_grad():
             embs = self.esm(input_ids)
-        logits: Tensor = self.classifier(self.preprocess(embs))  # type: ignore[no-untyped-call]
+        logits: Tensor = self.classifier(embs)
         return logits
 
     def general_step(self, batch: ClassificationData, mode: str) -> Tensor:

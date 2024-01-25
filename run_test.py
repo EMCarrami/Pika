@@ -20,25 +20,8 @@ device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cp
 def run_test(config: Dict[str, Any]) -> None:
     """Run test with pretrained model and log to wandb."""
     checkpoint = config["checkpoint"]["path"]
-    out_file = ""
-    if "save_file_path" in config:
-        out_file = config["save_file_path"]
-        if out_file == "auto":
-            save_dir = f"test_results/{config['model']['language_model']}_{config['model']['protein_model']}"
-            os.makedirs(save_dir, exist_ok=True)
-            file_name = checkpoint.split("/")[-1].split(".")[0]
-            out_file = f"{save_dir}/{file_name}.csv"
-        else:
-            assert out_file.endswith(".csv"), "only csv format is supported"
-            if len(out_file.split("/")) > 1:
-                assert not os.path.isfile(out_file), f"{out_file} already exists"
-                os.makedirs("/".join(out_file.split("/")[:-1]), exist_ok=True)
-            else:
-                out_file = f"test_results/{out_file}"
-                assert not os.path.isfile(out_file), f"{out_file} already exists"
-                os.makedirs("test_results", exist_ok=True)
-        logger.info(f"predicted texts will be saved in {out_file}")
     model, data = load_from_checkpoint(config, checkpoint, is_partial=config["checkpoint"].get("is_partial", False))
+    out_file = get_output_file_path(config)
     if "wandb" in config:
         wandb_logger = WandbLogger(**config["wandb"])
         trainer = Trainer(logger=wandb_logger, **config["trainer"])
@@ -52,6 +35,29 @@ def run_test(config: Dict[str, Any]) -> None:
             writer.writerow(("uniprot_id", "subject", "expected_answer", "generated_response"))
             for row in model.test_results:
                 writer.writerow(row)
+
+
+def get_output_file_path(config: Dict[str, Any]) -> str:
+    """Get output file path and create directories."""
+    out_file = ""
+    if "save_file_path" in config:
+        out_file = config["save_file_path"]
+        if out_file == "auto":
+            save_dir = f"test_results/{config['model']['language_model']}_{config['model']['protein_model']}"
+            os.makedirs(save_dir, exist_ok=True)
+            file_name = config["checkpoint"]["path"].split("/")[-1].split(".")[0]
+            out_file = f"{save_dir}/{file_name}.csv"
+        else:
+            assert out_file.endswith(".csv"), "only csv format is supported"
+            if len(out_file.split("/")) > 1:
+                assert not os.path.isfile(out_file), f"{out_file} already exists"
+                os.makedirs("/".join(out_file.split("/")[:-1]), exist_ok=True)
+            else:
+                out_file = f"test_results/{out_file}"
+                assert not os.path.isfile(out_file), f"{out_file} already exists"
+                os.makedirs("test_results", exist_ok=True)
+        logger.info(f"predicted texts will be saved in {out_file}")
+    return out_file
 
 
 def load_from_checkpoint(

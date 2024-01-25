@@ -31,7 +31,7 @@ def run_test(config: Dict[str, Any]) -> None:
     trainer.test(model, data)
     if out_file:
         with open(out_file, "a", newline="") as f:
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter="\t")
             writer.writerow(("uniprot_id", "subject", "expected_answer", "generated_response"))
             for row in model.test_results:
                 writer.writerow(row)
@@ -43,12 +43,13 @@ def get_output_file_path(config: Dict[str, Any]) -> str:
     if "save_file_path" in config:
         out_file = config["save_file_path"]
         if out_file == "auto":
-            save_dir = f"test_results/{config['model']['language_model']}_{config['model']['protein_model']}"
+            model_name = config["model"]["language_model"].split("/")[-1]
+            save_dir = f"test_results/{model_name}_{config['model']['protein_model']}"
             os.makedirs(save_dir, exist_ok=True)
             file_name = config["checkpoint"]["path"].split("/")[-1].split(".")[0]
-            out_file = f"{save_dir}/{file_name}.csv"
+            out_file = f"{save_dir}/{file_name}.tsv"
         else:
-            assert out_file.endswith(".csv"), "only csv format is supported"
+            assert out_file.endswith(".tsv"), "only csv format is supported"
             if len(out_file.split("/")) > 1:
                 assert not os.path.isfile(out_file), f"{out_file} already exists"
                 os.makedirs("/".join(out_file.split("/")[:-1]), exist_ok=True)
@@ -70,9 +71,9 @@ def load_from_checkpoint(
 
     if checkpoint_path in checkpoints["path"]:
         artifact_dir = find_wandb_checkpoint(checkpoints["path"][checkpoint_path])
-        checkpoint_path = f"{artifact_dir}/{checkpoint_path}"
         config["seed"] = checkpoints["seed"][checkpoint_path]
         logger.info(f"seed was automatically set to {config['seed']} for wandb model {checkpoint_path}")
+        checkpoint_path = f"{artifact_dir}/{checkpoint_path}"
 
     if is_partial:
         model = load_reduced_model(checkpoint_path)

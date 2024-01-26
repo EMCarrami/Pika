@@ -4,7 +4,7 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
-from cprt.utils.gpt_processor import GPTProcessor  # Import your GPTProcessor class
+from cprt.utils.chatgpt_processor import GPTProcessor  # Import your GPTProcessor class
 
 
 class TestGPTProcessor(unittest.TestCase):
@@ -20,8 +20,8 @@ class TestGPTProcessor(unittest.TestCase):
         processor = GPTProcessor(model="text-davinci-003", secondary_model=None)
 
         message_list = [
-            {"messages": [{"role": "system", "content": "Test 1"}]},
-            {"messages": [{"role": "system", "content": "Test 2"}]},
+            [{"role": "system", "content": "Test 1"}, {"role": "user", "content": "Hello!"}],
+            [{"role": "system", "content": "Test 2"}, {"role": "user", "content": "Hello!"}],
         ]
         request_names = ["req1", "req2"]
 
@@ -62,7 +62,7 @@ class TestGPTProcessor(unittest.TestCase):
         processor = GPTProcessor(model="text-davinci-003", secondary_model=None)
 
         # Create 100 messages, where the second one is designed to fail
-        message_list = [{"messages": [{"role": "system", "content": f"Test {i}"}]} for i in range(100)]
+        message_list = [[{"role": "system", "content": f"Test {i}"}] for i in range(100)]
         request_names = [f"req{i}" for i in range(100)]
 
         with self.assertRaises(Exception):

@@ -38,7 +38,7 @@ class GPTProcessor:
         if "request_timeout" not in self.kwargs:
             self.kwargs["request_timeout"] = 90
 
-    def get_response(self, message: Dict[str, List[Dict[str, str]]], request_id: str = "") -> Dict[str, Any]:
+    def get_response(self, message: List[Dict[str, str]], request_id: str = "") -> Dict[str, Any]:
         """
         Attempt to get a response from ChatGPT.
 
@@ -86,7 +86,7 @@ class GPTProcessor:
 
     def bulk_process(
         self,
-        message_list: List[Dict[str, List[Dict[str, str]]]],
+        message_list: List[List[Dict[str, str]]],
         request_names: str | List[str],
         num_workers: int,
         return_dict: bool = False,

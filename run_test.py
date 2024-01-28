@@ -39,26 +39,28 @@ def run_test(config: Dict[str, Any]) -> None:
 
 def get_output_file_path(config: Dict[str, Any]) -> str:
     """Get output file path and create directories."""
-    out_file = ""
     if "save_file_path" in config:
         out_file = config["save_file_path"]
         if out_file == "auto":
-            model_name = config["model"]["language_model"].split("/")[-1]
-            save_dir = f"test_results/{model_name}_{config['model']['protein_model']}"
-            os.makedirs(save_dir, exist_ok=True)
+            save_dir = "test_results"
             file_name = config["checkpoint"]["path"].split("/")[-1].split(".")[0]
+            if "name" in config["wandb"]:
+                file_name = f"{config['wandb']['name']}_{file_name.split('_')[-1]}.tsv"
             out_file = f"{save_dir}/{file_name}.tsv"
         else:
             assert out_file.endswith(".tsv"), "only csv format is supported"
             if len(out_file.split("/")) > 1:
-                assert not os.path.isfile(out_file), f"{out_file} already exists"
-                os.makedirs("/".join(out_file.split("/")[:-1]), exist_ok=True)
+                save_dir = "/".join(out_file.split("/")[:-1])
             else:
-                out_file = f"test_results/{out_file}"
-                assert not os.path.isfile(out_file), f"{out_file} already exists"
-                os.makedirs("test_results", exist_ok=True)
+                save_dir = "test_results"
+                out_file = f"{save_dir}/{out_file}"
+        assert not os.path.isfile(out_file), f"{out_file} already exists"
+        os.makedirs(save_dir, exist_ok=True)
         logger.info(f"predicted texts will be saved in {out_file}")
-    return out_file
+        assert isinstance(out_file, str)
+        return out_file
+    else:
+        return ""
 
 
 def load_from_checkpoint(

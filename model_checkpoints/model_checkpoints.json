@@ -10,19 +10,25 @@
         "1xvwntxd_polished-monkey-31_e0_s224085.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/polished-monkey-31_224085_model:v0",
         "pefb5f6v_legendary-glitter-15_e0_s156856.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/legendary-glitter-15_156856_model:v0",
         "zaxd70u5_zany-spaceship-68_e0_s134526.ckpt": "eli-carrami/Cprt-Paper-Final/model_artifact_f1:v0",
-        "zaxd70u5_zany-spaceship-68_e0_s224210.ckpt": "eli-carrami/Cprt-Paper-Final/model_artifact_loss:v0"
+        "zaxd70u5_zany-spaceship-68_e0_s224210.ckpt": "eli-carrami/Cprt-Paper-Final/model_artifact_loss:v0",
+        "h95vdy7f_fresh-vortex-8_e0_s375780.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/fresh-vortex-8_375780_model:v0",
+        "qmqpl5l8_vague-silence-25_e1_s448177.ckpt":  "eli-carrami/Cprt-Paper-Checkpoints/vague-silence-25_448177_model:v0",
+        "qmqpl5l8_vague-silence-25_e2_s616244.ckpt": "eli-carrami/Cprt-Paper-Checkpoints/vague-silence-25_616244_model:v0"
     },
     "seed": {
         "vd5nx0wu_serene-shadow-9_e1_s313723.ckpt": 7,
         "vd5nx0wu_serene-shadow-9_e0_s44817.ckpt": 7,
         "h95vdy7f_fresh-vortex-8_e0_s150312.ckpt": 42,
-        "fm9pxtkz_treasured-pyramid-5_e1_s216679.ckpt": 7,
-        "vjfg92z9_polished-smoke-42_best_loss_step100840.ckpt": 0,
-        "nb30cnqt_dauntless-surf-44_e1_s358891.ckpt": 7,
+        "fm9pxtkz_treasured-pyramid-5_e1_s216679.ckpt": 0,
+        "vjfg92z9_polished-smoke-42_best_loss_step100840.ckpt": 7,
+        "nb30cnqt_dauntless-surf-44_e1_s358891.ckpt": 42,
         "9n7lc43f_solar-voice-33_e0_s150144.ckpt": 7,
-        "1xvwntxd_polished-monkey-31_e0_s224085.ckpt": 0,
+        "1xvwntxd_polished-monkey-31_e0_s224085.ckpt": 7,
         "pefb5f6v_legendary-glitter-15_e0_s156856.ckpt": 7,
         "zaxd70u5_zany-spaceship-68_e0_s134526.ckpt": 0,
-        "zaxd70u5_zany-spaceship-68_e0_s224210.ckpt": 0
+        "zaxd70u5_zany-spaceship-68_e0_s224210.ckpt": 0,
+        "h95vdy7f_fresh-vortex-8_e0_s375780.ckpt": 42,
+        "qmqpl5l8_vague-silence-25_e1_s448177.ckpt": 7,
+        "qmqpl5l8_vague-silence-25_e2_s616244.ckpt": 7
     }
 }

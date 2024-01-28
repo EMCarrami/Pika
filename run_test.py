@@ -45,7 +45,7 @@ def get_output_file_path(config: Dict[str, Any]) -> str:
             save_dir = "test_results"
             file_name = config["checkpoint"]["path"].split("/")[-1].split(".")[0]
             if "name" in config["wandb"]:
-                file_name = f"{config['wandb']['name']}_{file_name.split('_')[-1]}.tsv"
+                file_name = f"{config['wandb']['name']}_{file_name.split('_')[-1]}"
             out_file = f"{save_dir}/{file_name}.tsv"
         else:
             assert out_file.endswith(".tsv"), "only csv format is supported"

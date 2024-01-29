@@ -7,6 +7,7 @@ from lightning import LightningModule
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import rank_zero_only
 from torch import Tensor
+from torch.optim import Optimizer
 from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import AutoTokenizer
@@ -297,23 +298,25 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 text_table.add_data(*v.values())  # type: ignore[no-untyped-call]
             wandb.log({f"val_generation_{self.current_epoch}": text_table})
 
-    def configure_optimizers(self) -> torch.optim.Optimizer | Dict[str, Any]:
+    def configure_optimizers(self) -> Optimizer | Tuple[List[Optimizer], List[Dict[str, Any]]]:
         """Configure optimizer."""
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         if self.schedulers is None:
             return optimizer
         else:
-            warmup_steps = 0
+            total_samples = len(self.trainer.datamodule.train_dataloader().dataset)
+            batch_size = self.trainer.datamodule.train_batch_size
+            accumulate_grad_batches = self.trainer.accumulate_grad_batches
+            total_steps_per_epoch = (total_samples // batch_size) // accumulate_grad_batches
+            warmup_steps = int(total_steps_per_epoch * 0.05)
             schedulers = []
             if "warmup" in self.schedulers:
-                warmup_steps = 1000
                 warmup_scheduler = LambdaLR(optimizer, lambda step: min(1.0, step / warmup_steps))
-                schedulers.append({"scheduler": warmup_scheduler, "interval": "step", "frequency": 1})
+                schedulers.append({"scheduler": warmup_scheduler, "interval": "step"})
             if "cosine" in self.schedulers:
-                total_steps = self.trainer.estimated_stepping_batches
-                anneal_scheduler = CosineAnnealingLR(optimizer, T_max=total_steps - warmup_steps)
-                schedulers.append({"scheduler": anneal_scheduler, "interval": "step", "frequency": 1})
-            return {"optimizer": optimizer, "lr_scheduler": schedulers}
+                anneal_scheduler = CosineAnnealingLR(optimizer, T_max=total_steps_per_epoch)
+                schedulers.append({"scheduler": anneal_scheduler, "interval": "step"})
+            return [optimizer], schedulers
 
     def configure_metrics(self) -> None:
         """Configure metrics."""

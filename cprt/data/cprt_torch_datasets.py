@@ -123,7 +123,6 @@ class CPrtMetricDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
             "in_nucleus": "Does this protein localize to the nucleus?",
             "in_mitochondria": "Does this protein localize to mitochondria?",
             "localization": "What is the sub-cellular location of this protein?",
-            "kingdom": "To which kingdom of life does this protein belong?",
             "cofactor": "What is a cofactor of this protein?",
             "mw": "What is the molecular weight of this protein?",
         }

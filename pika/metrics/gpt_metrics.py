@@ -42,7 +42,7 @@ def get_gpt_metrics(
     subjects: List[str] | None = None,
     save_dir: str = "results",
 ) -> None:
-    """Get GPT's comparison response for a results table."""
+    """Get GPT's comparison response for Biochem-ReAct's results table."""
     if wandb_project is not None:
         if wandb_run_id is not None:
             wandb.init(project=wandb_project, id=wandb_run_id, resume="must")

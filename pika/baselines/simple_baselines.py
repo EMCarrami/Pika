@@ -8,7 +8,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from pika.datamodule.pika_datamodule import PikaDataModule
-from pika.metrics.biochem_metrics import BiochemMetrics
+from pika.metrics.biochem_lite_metrics import BiochemLiteMetrics
 from pika.model.original_phi.modeling_phi import PhiForCausalLM
 from pika.utils.helpers import load_config
 
@@ -24,7 +24,7 @@ def get_random_baseline(config: Dict[str, Any]) -> None:
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]
     datamodule = PikaDataModule(**config["datamodule"])
 
-    metric = BiochemMetrics()
+    metric = BiochemLiteMetrics()
     df = datamodule.val_metric_dataset.split_df
     for n in df.metric.unique():
         lbl = df[df.metric == n]["value"].to_list()
@@ -66,7 +66,7 @@ def get_llm_only_baseline(config: Dict[str, Any]) -> None:
     else:
         raise ValueError("only gpt2 and microsoft/phi-2 models are supported.")
 
-    metric = BiochemMetrics()
+    metric = BiochemLiteMetrics()
     generation_length = 20
     llm.eval()
     with torch.no_grad():

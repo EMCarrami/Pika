@@ -16,7 +16,7 @@ from transformers import AutoTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from pika.datamodule.pika_datamodule import PikaData, PikaMetricData
-from pika.metrics.biochem_metrics import BiochemMetrics
+from pika.metrics.biochem_lite_metrics import BiochemLiteMetrics
 from pika.model.helper_modules import TruncatedESM2
 from pika.model.pika_modules import (
     CrossPikaAttentionLayer,
@@ -234,11 +234,11 @@ class PikaModel(LightningModule):  # type: ignore[misc]
         gc.collect()
 
     def on_test_start(self) -> None:
-        """Create wandb table."""
+        """Create wandb table for Biochem-ReAct metrics."""
         self.test_results: List[List[str]] = []
 
     def test_step(self, batch: PikaMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
-        """Perform test on test_subjects."""
+        """Perform test on Biochem-ReAct metrics."""
         out = self.get_response(
             protein_ids=batch.protein, info_ids=batch.question, generation_length=60, keep_prompt=False
         )
@@ -255,7 +255,7 @@ class PikaModel(LightningModule):  # type: ignore[misc]
             )
             for v in self.test_results:
                 test_table.add_data(*v)  # type: ignore[no-untyped-call]
-            wandb.log({"test_results": test_table})
+            wandb.log({"Biochem-ReAct_results": test_table})
 
     def log_example_outputs(self, output_text: List[str], batch: PikaMetricData) -> None:
         """
@@ -282,7 +282,7 @@ class PikaModel(LightningModule):  # type: ignore[misc]
         self.log_dict({f"metrics/val_{k}": v.mean() for k, v in rouge_scores.items()})
         self.val_rouge_scores.reset()
         biochem_scores = self.val_biochem.compute()
-        self.log_dict({f"biochem/val_{k}": v for k, v in biochem_scores.items()})
+        self.log_dict({f"Biochem-Lite/val_{k}": v for k, v in biochem_scores.items()})
         self.val_biochem.reset()
 
     def on_train_epoch_end(self) -> None:
@@ -325,7 +325,7 @@ class PikaModel(LightningModule):  # type: ignore[misc]
         self.train_perplexity = Perplexity(ignore_index=-100)
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_rouge_scores = ROUGEScore()
-        self.val_biochem = BiochemMetrics()
+        self.val_biochem = BiochemLiteMetrics()
         self.val_example_outputs: Dict[str, Dict[str, str]] = OrderedDict()
 
     @torch.no_grad()

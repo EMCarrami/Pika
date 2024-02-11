@@ -7,14 +7,14 @@ from sklearn.metrics import balanced_accuracy_score, f1_score, recall_score
 from torchmetrics import Metric
 
 
-class BiochemMetrics(Metric):
-    """Class to compute biochemical metrics from textual output."""
+class BiochemLiteMetrics(Metric):
+    """Class to compute Biochem-Lite metrics from textual output."""
 
     numeric_preds: List[Tuple[str, float]]
     class_preds: List[Tuple[str, str, str]]
 
     def __init__(self, **kwargs: Any) -> None:
-        super(BiochemMetrics, self).__init__(**kwargs)
+        super(BiochemLiteMetrics, self).__init__(**kwargs)
         self.add_state("numeric_preds", [])
         self.add_state("class_preds", [])
 
@@ -96,7 +96,7 @@ class BiochemMetrics(Metric):
         # aggregating localization "polar questions", all starting with is_in
         is_in = []
         for n, v in metric_out.items():
-            if n.startswith("in_"):
+            if n.startswith("in_") and n.endswith("_f1"):
                 is_in.append(v)
-        metric_out["average_semantic_localization"] = cast(float, np.mean(is_in))
+        metric_out["binary_question_mean_f1"] = cast(float, np.mean(is_in))
         return metric_out

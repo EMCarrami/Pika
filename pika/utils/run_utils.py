@@ -10,7 +10,6 @@ from pika.baselines.classification_datamodule import ClassificationDataModule
 from pika.baselines.classification_model import ProteinClassificationModel
 from pika.datamodule.pika_datamodule import PikaDataModule
 from pika.model.pika_model import PikaModel
-from pika.utils import ROOT
 from pika.utils.helpers import ExceptionHandlerCallback
 
 
@@ -36,6 +35,7 @@ def train_pika(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
 
     callbacks = []
     save_checkpoints = config["trainer"].pop("save_checkpoints", [])
+    checkpoint_path = config["trainer"].pop("checkpoint_path", "model_checkpoints")
     time_stamp = datetime.now().strftime("%y%m%d%H%M%S")
     if "loss" in save_checkpoints:
         callbacks.append(
@@ -43,17 +43,17 @@ def train_pika(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
                 monitor="loss/val_loss",
                 mode="min",
                 save_top_k=1,
-                dirpath=f"{ROOT}/model_checkpoints/{time_stamp}_{group_name}_{config.get('seed', 'random')}_loss",
+                dirpath=f"{checkpoint_path}/{time_stamp}_{group_name}_{config.get('seed', 'random')}_loss",
                 verbose=True,
             )
         )
     if "f1" in save_checkpoints:
         callbacks.append(
             ModelCheckpoint(
-                monitor="biochem/val_localization_f1",
+                monitor="biochem/val_cofactor",
                 mode="max",
                 save_top_k=1,
-                dirpath=f"{ROOT}/model_checkpoints/{time_stamp}_{group_name}_{config.get('seed', 'random')}_f1",
+                dirpath=f"{checkpoint_path}/{time_stamp}_{group_name}_{config.get('seed', 'random')}_cofactor",
                 verbose=True,
             )
         )

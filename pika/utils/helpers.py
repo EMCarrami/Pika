@@ -11,7 +11,6 @@ from lightning import Callback, Trainer
 from loguru import logger
 
 from pika.model.pika_model import PikaModel
-from pika.utils import ROOT
 
 
 def gpu_usage_logger(wandb_config: Dict[str, str], gpu_id: int, log_interval: float = 0.1) -> None:
@@ -58,13 +57,7 @@ def cli_parser() -> Dict[str, Any]:
 def load_config(path: str) -> Dict[str, Any]:
     """Load config file from path."""
     assert path.endswith(".json"), "only json config is supported."
-    if path.startswith("/"):
-        absolute_path = path
-    elif "/" not in path:
-        absolute_path = f"{ROOT}/configs/{path}"
-    else:
-        absolute_path = f"{ROOT}/{path}"
-    with open(absolute_path, "r") as f:
+    with open(path, "r") as f:
         config: Dict[str, Any] = json.load(f)
     return config
 

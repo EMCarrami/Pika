@@ -32,7 +32,7 @@ jobs:
 
     - name: Lint with black
       run: |
-        black --check .
+        black --check . --line-length 120
 
     - name: Lint with flake8
       run: |

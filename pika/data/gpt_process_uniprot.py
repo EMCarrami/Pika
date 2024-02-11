@@ -3,9 +3,9 @@ import pickle
 from os.path import isfile
 from typing import Any, Dict
 
-from cprt.data.gpt_instructions import METRIC_INSTRUCTIONS, SUMMARY_INSTRUCTIONS
-from cprt.utils import DATA_PATH
-from cprt.utils.chatgpt_processor import GPTProcessor
+from pika.data.gpt_instructions import METRIC_INSTRUCTIONS, SUMMARY_INSTRUCTIONS
+from pika.utils import DATA_PATH
+from pika.utils.chatgpt_processor import GPTProcessor
 
 
 def process_fields_with_gpt(save_dir: str = "datasets/gpt3", num_workers: int = 20) -> None:

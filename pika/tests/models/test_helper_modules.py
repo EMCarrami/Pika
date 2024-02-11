@@ -3,13 +3,13 @@ from unittest import TestCase
 import torch
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
-from cprt.model.helper_modules import (
-    CPrtCrossAttentionLayer,
+from pika.model.helper_modules import (
     FeedForwardNetwork,
     Perceiver,
     PerceiverLayer,
     TruncatedESM2,
 )
+from pika.model.pika_modules import CrossPikaAttentionLayer
 
 
 class TestTruncatedTransformer(TestCase):
@@ -89,16 +89,22 @@ class TestCrossAttentionDecoderLayer(TestCase):
 
     def setUp(self) -> None:
         llm = GPT2LMHeadModel.from_pretrained("gpt2")
+        text_emb_dim = llm.config.n_embd
+        num_decoder_heads = llm.config.n_head
         self.decoder = llm.transformer.h[0]
-        self.layer = CPrtCrossAttentionLayer(
+        self.layer = CrossPikaAttentionLayer(
             protein_emb_dim=10,
+            text_emb_dim=text_emb_dim,
             decoder=self.decoder,
+            num_decoder_heads=num_decoder_heads,
             num_perceiver_heads=1,
             perceiver_latent_size=5,
             num_perceiver_layers=1,
             enable_gradient_checkpointing=False,
+            dropout=0,
         )
-        self.text_emb = torch.rand(2, 50, 768)
+
+        self.text_emb = torch.rand(2, 50, text_emb_dim)
         self.protein_emb = torch.rand(2, 8, 10)
 
     def test_output_shape(self) -> None:

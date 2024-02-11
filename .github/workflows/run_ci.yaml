@@ -38,7 +38,7 @@ jobs:
 
     - name: Type check with mypy
       run: |
-        mypy cprt/ --strict --install-types --non-interactive --show-traceback
+        mypy pika/ --strict --install-types --non-interactive --show-traceback
 
     - name: Run tests
       run: |

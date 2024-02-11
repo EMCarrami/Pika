@@ -4,14 +4,14 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
-from cprt.utils.chatgpt_processor import GPTProcessor  # Import your GPTProcessor class
+from pika.utils.chatgpt_processor import GPTProcessor  # Import your GPTProcessor class
 
 
 class TestGPTProcessor(unittest.TestCase):
     """Test class for GPTProcessor's multi-threading."""
 
     @patch.dict(os.environ, {"OPENAI_API_KEY": "fake_api_key"})
-    @patch("cprt.utils.gpt_processor.GPTProcessor.get_response")
+    @patch("pika.utils.gpt_processor.GPTProcessor.get_response")
     def test_bulk_process_success(self, mock_get_response: MagicMock) -> None:
         """Check outputs are correct."""
         # Mock successful responses from get_response
@@ -47,7 +47,7 @@ class TestGPTProcessor(unittest.TestCase):
         os.rmdir("test_dir")
 
     @patch.dict(os.environ, {"OPENAI_API_KEY": "fake_api_key"})
-    @patch("cprt.utils.gpt_processor.GPTProcessor.get_response")
+    @patch("pika.utils.gpt_processor.GPTProcessor.get_response")
     def test_bulk_process_failure_stops_all(self, mock_get_response: MagicMock) -> None:
         """Check processes fail on time."""
         # Mock a failure on the second call to get_response

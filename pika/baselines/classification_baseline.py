@@ -5,8 +5,8 @@ from lightning import LightningModule
 from torch import Tensor, nn
 from torchmetrics import F1Score, MeanAbsoluteError
 
-from cprt.data.classification_datamodule import ClassificationData
-from cprt.model.helper_modules import TruncatedESM2
+from pika.baselines.classification_datamodule import ClassificationData
+from pika.model.helper_modules import TruncatedESM2
 
 
 class ProteinClassificationModel(LightningModule):  # type: ignore[misc]

@@ -3,6 +3,7 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, cast
 
 import torch
+import wandb
 from lightning import LightningModule
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.utilities import rank_zero_only
@@ -14,29 +15,28 @@ from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import AutoTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
-import wandb
-from cprt.data.cprt_datamodule import CPrtData, CPrtMetricData
-from cprt.metrics.biochem_metrics import BiochemMetrics
-from cprt.model.adapted_phi_models import PhiCPrt
-from cprt.model.helper_modules import (
-    CPrtCrossAttentionLayer,
-    CPrtEncoderSkipLayer,
-    CPrtSoftPromptLayer,
-    GPT2CPrt,
-    TruncatedESM2,
+from pika.datamodule.pika_datamodule import PikaData, PikaMetricData
+from pika.metrics.biochem_metrics import BiochemMetrics
+from pika.model.helper_modules import TruncatedESM2
+from pika.model.pika_modules import (
+    CrossPikaAttentionLayer,
+    GPT2ForPika,
+    PhiForPika,
+    PikaEncoderSkipLayer,
+    SelfPikaLayer,
 )
 
 
-class CPrtModel(LightningModule):  # type: ignore[misc]
-    """CPrt Lightning model."""
+class PikaModel(LightningModule):  # type: ignore[misc]
+    """Pika Lightning model."""
 
-    MultiModalLayer: Type[CPrtCrossAttentionLayer] | Type[CPrtSoftPromptLayer]
+    MultiModalLayer: Type[CrossPikaAttentionLayer] | Type[SelfPikaLayer]
 
     def __init__(
         self,
         language_model: str,
         protein_model: str,
-        multimodal_strategy: Literal["cross-attention", "soft-prompt"],
+        multimodal_strategy: Literal["cross-pika", "self-pika"],
         protein_layer_to_use: int = -1,
         perceiver_latent_size: int = 20,
         num_perceiver_layers: int = 1,
@@ -47,19 +47,19 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         schedulers: List[str] | None = None,
     ) -> None:
         """Initialize language and protein encoders."""
-        super(CPrtModel, self).__init__()
+        super(PikaModel, self).__init__()
         self.save_hyperparameters()
-        assert multimodal_strategy in ["cross-attention", "soft-prompt"]
+        assert multimodal_strategy in ["cross-pika", "self-pika"]
         self.multimodal_strategy = multimodal_strategy
-        if multimodal_strategy == "soft-prompt":
+        if multimodal_strategy == "self-pika":
             assert multimodal_layers == [
                 0
-            ], "For soft-prompting only first decoder can be made multimodal. Set multimodal_layers==[0]"
-            self.MultiModalLayer = CPrtSoftPromptLayer
-        elif multimodal_strategy == "cross-attention":
-            self.MultiModalLayer = CPrtCrossAttentionLayer
+            ], "For self-pika only first decoder can be made multimodal. Set multimodal_layers==[0]"
+            self.MultiModalLayer = SelfPikaLayer
+        elif multimodal_strategy == "cross-pika":
+            self.MultiModalLayer = CrossPikaAttentionLayer
         else:
-            raise ValueError("only cross-attention and soft-prompt multimodal strategies are supported.")
+            raise ValueError("only cross-pika and self-pika multimodal strategies are supported.")
         self.language_model = language_model
         self.protein_model = protein_model
         self.protein_layer_to_use = protein_layer_to_use
@@ -85,15 +85,15 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             param.requires_grad = False
 
     def configure_language_model(self) -> None:
-        """Configure cprt_llm model and add cross-attention/soft-prompt/skip layers to the decoder."""
+        """Configure pika_llm model and add cross-attention/soft-prompt/skip layers to the decoder."""
         if "gpt2" in self.language_model:
             self.text_tokenizer = AutoTokenizer.from_pretrained(self.language_model, use_fast=False)
-            self.cprt_llm = GPT2CPrt.from_pretrained(self.language_model)
+            self.pika_llm = GPT2ForPika.from_pretrained(self.language_model)
         elif "phi" in self.language_model:
             self.text_tokenizer = AutoTokenizer.from_pretrained(
                 self.language_model, use_fast=False, revision="7e10f3ea09c0ebd373aebc73bc6e6ca58204628d"
             )
-            self.cprt_llm = PhiCPrt.from_pretrained(
+            self.pika_llm = PhiForPika.from_pretrained(
                 self.language_model,
                 flash_attn=True,
                 flash_rotary=True,
@@ -103,18 +103,18 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         else:
             raise ValueError(f"only gpt2 and microsoft/phi models are supported. {self.language_model} was given")
         assert (
-            self.cprt_llm.transformer.gradient_checkpointing is False
+            self.pika_llm.transformer.gradient_checkpointing is False
         ), "gradient_checkpointing in LLMs not supported as the order of args to the input cannot be guaranteed."
 
-        for param in self.cprt_llm.parameters():
+        for param in self.pika_llm.parameters():
             param.requires_grad = False
 
         protein_emb_dim = self.esm.embedding_dim
         protein_num_heads = self.esm.num_heads
-        text_emb_dim = self.cprt_llm.config.n_embd
-        dropout = self.cprt_llm.config.attn_pdrop
-        num_decoder_heads = self.cprt_llm.config.n_head
-        decoder_layers = self.cprt_llm.transformer.h
+        text_emb_dim = self.pika_llm.config.n_embd
+        dropout = self.pika_llm.config.attn_pdrop
+        num_decoder_heads = self.pika_llm.config.n_head
+        decoder_layers = self.pika_llm.transformer.h
         n_llm_layers = len(decoder_layers)
         # assign which layers to make multimodal
         if isinstance(self.multimodal_layers, str) and self.multimodal_layers.startswith("all"):
@@ -144,11 +144,11 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                     dropout,
                 )
                 if layer_id in self.multimodal_layers
-                else CPrtEncoderSkipLayer(decoder)
+                else PikaEncoderSkipLayer(decoder)
                 for layer_id, decoder in enumerate(decoder_layers)
             ]
         )
-        self.cprt_llm.transformer.h = multimodal_block
+        self.pika_llm.transformer.h = multimodal_block
 
     def forward(
         self,
@@ -165,7 +165,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         """Add protein latents as word embedding to the beginning of the sentence."""
         with torch.no_grad():
             protein_embeddings = self.esm(protein_ids)
-        if self.multimodal_strategy == "soft-prompt":
+        if self.multimodal_strategy == "self-pika":
             # Extend info_ids, labels and mask to accommodate for protein latents
             prompt_size = (info_ids.size(0), self.perceiver_latent_size)
             info_ids = torch.concat([info_ids.new_full(size=prompt_size, fill_value=0), info_ids], dim=1)
@@ -174,7 +174,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             attention_mask = torch.concat(
                 [attention_mask.new_full(size=prompt_size, fill_value=1), attention_mask], dim=1
             )
-        out = self.cprt_llm(
+        out = self.pika_llm(
             input_ids=info_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -186,11 +186,11 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             return_dict=return_dict,
         )
         # remove logits of the protein latents
-        if self.multimodal_strategy == "soft-prompt":
+        if self.multimodal_strategy == "self-pika":
             out["logits"] = out["logits"][:, self.perceiver_latent_size :]
         return out
 
-    def training_step(self, batch: CPrtData, batch_idx: int) -> Tensor:
+    def training_step(self, batch: PikaData, batch_idx: int) -> Tensor:
         """Take a train step."""
         out = self(protein_ids=batch.protein, info_ids=batch.info, attention_mask=batch.info_mask, labels=batch.labels)
         loss: Tensor = out["loss"]
@@ -204,10 +204,10 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         torch.cuda.empty_cache()
         return loss
 
-    def validation_step(self, batch: CPrtData | CPrtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
+    def validation_step(self, batch: PikaData | PikaMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Take a val step."""
         if dataloader_idx == 0:
-            assert isinstance(batch, CPrtData)
+            assert isinstance(batch, PikaData)
             out = self(
                 protein_ids=batch.protein,
                 info_ids=batch.info,
@@ -224,7 +224,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
             )
             self.val_rouge_scores.update(generated_text, input_text)
         else:
-            assert isinstance(batch, CPrtMetricData)
+            assert isinstance(batch, PikaMetricData)
             out = self.get_response(
                 protein_ids=batch.protein, info_ids=batch.question, generation_length=20, keep_prompt=False
             )
@@ -237,7 +237,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         """Create wandb table."""
         self.test_results: List[List[str]] = []
 
-    def test_step(self, batch: CPrtMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
+    def test_step(self, batch: PikaMetricData, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Perform test on test_subjects."""
         out = self.get_response(
             protein_ids=batch.protein, info_ids=batch.question, generation_length=60, keep_prompt=False
@@ -257,7 +257,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 test_table.add_data(*v)  # type: ignore[no-untyped-call]
             wandb.log({"test_results": test_table})
 
-    def log_example_outputs(self, output_text: List[str], batch: CPrtMetricData) -> None:
+    def log_example_outputs(self, output_text: List[str], batch: PikaMetricData) -> None:
         """
         Log example generated responses.
 
@@ -335,7 +335,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         """Generate text using input_ids and protein_embeddings as encoder_hidden_states."""
         self.eval()
         protein_embeddings = self.esm(protein_ids)
-        if self.multimodal_strategy == "soft-prompt":
+        if self.multimodal_strategy == "self-pika":
             info_ids = torch.concat(
                 [info_ids.new_full(size=(info_ids.size(0), self.perceiver_latent_size), fill_value=0), info_ids], dim=1
             )
@@ -345,7 +345,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
                 mask = question == self.text_tokenizer.eos_token_id
                 prompt_len = cast(int, torch.where(mask)[0][0] if mask.any() else len(question))
                 pos_offset = 0 if keep_prompt else prompt_len
-                preds = self.cprt_llm.generate(
+                preds = self.pika_llm.generate(
                     input_ids=question[:prompt_len].unsqueeze(0),
                     encoder_hidden_states=protein.unsqueeze(0),
                     use_cache=False,
@@ -357,7 +357,7 @@ class CPrtModel(LightningModule):  # type: ignore[misc]
         else:
             prompt_len = info_ids.size(1)
             pos_offset = 0 if keep_prompt else prompt_len
-            preds = self.cprt_llm.generate(
+            preds = self.pika_llm.generate(
                 input_ids=info_ids,
                 encoder_hidden_states=protein_embeddings,
                 use_cache=False,

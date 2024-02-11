@@ -2,15 +2,15 @@ import random
 from typing import Any, Dict, cast
 
 import torch
+import wandb
 from lightning.pytorch import seed_everything
 from tqdm import tqdm
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
-import wandb
-from cprt.data.cprt_datamodule import CPrtDataModule
-from cprt.metrics.biochem_metrics import BiochemMetrics
-from cprt.model.original_phi.modeling_phi import PhiForCausalLM
-from cprt.utils.helpers import load_config
+from pika.datamodule.pika_datamodule import PikaDataModule
+from pika.metrics.biochem_metrics import BiochemMetrics
+from pika.model.original_phi.modeling_phi import PhiForCausalLM
+from pika.utils.helpers import load_config
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -22,7 +22,7 @@ def get_random_baseline(config: Dict[str, Any]) -> None:
 
     config["datamodule"]["language_model"] = config["model"]["language_model"]
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]
-    datamodule = CPrtDataModule(**config["datamodule"])
+    datamodule = PikaDataModule(**config["datamodule"])
 
     metric = BiochemMetrics()
     df = datamodule.val_metric_dataset.split_df
@@ -47,7 +47,7 @@ def get_llm_only_baseline(config: Dict[str, Any]) -> None:
 
     config["datamodule"]["language_model"] = config["model"]["language_model"]
     config["datamodule"]["protein_model"] = config["model"]["protein_model"]
-    datamodule = CPrtDataModule(**config["datamodule"])
+    datamodule = PikaDataModule(**config["datamodule"])
 
     if "gpt2" in config["model"]["language_model"]:
         text_tokenizer = AutoTokenizer.from_pretrained(config["model"]["language_model"], use_fast=False)

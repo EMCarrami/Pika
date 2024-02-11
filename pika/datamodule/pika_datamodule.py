@@ -7,19 +7,19 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from cprt.data.cprt_torch_datasets import (
-    CPrtDataset,
-    CPrtMetricDataset,
-    CPrtTestDataset,
+from pika.data.data_utils import load_data_from_path, random_split_df
+from pika.datamodule.pika_torch_datasets import (
+    PikaDataset,
+    PikaLiteDataset,
+    PikaReActDataset,
 )
-from cprt.data.data_utils import load_data_from_path, random_split_df
 
-CPrtData = namedtuple("CPrtData", ["protein", "info", "info_mask", "labels"])
-CPrtMetricData = namedtuple("CPrtMetricData", ["protein", "question", "metric_name", "expected_value"])
+PikaData = namedtuple("PikaData", ["protein", "info", "info_mask", "labels"])
+PikaMetricData = namedtuple("PikaMetricData", ["protein", "question", "metric_name", "expected_value"])
 
 
-class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
-    """Data module and collator for CPrtData."""
+class PikaDataModule(LightningDataModule):  # type: ignore[misc]
+    """Data module and collator for PikaData."""
 
     test_df: pd.DataFrame | None
 
@@ -61,7 +61,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
                         Creates a test dataloader for each subject.
         :param num_workers: number of dataloader workers
         """
-        super(CPrtDataModule, self).__init__()
+        super(PikaDataModule, self).__init__()
         rev = "main"
         if "phi" in language_model:
             rev = "7e10f3ea09c0ebd373aebc73bc6e6ca58204628d"
@@ -120,15 +120,15 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
             uid: [v for fn in data_field_names for v in fields[fn]] for uid, fields in data_dict.items()
         }
         metadata.loc[:, "examples"] = metadata["uniprot_id"].apply(lambda x: data_fields[x])
-        self.train_dataset = CPrtDataset(metadata, sequences, "train", subsample_data)
-        self.val_dataset = CPrtDataset(metadata, sequences, "val")
+        self.train_dataset = PikaDataset(metadata, sequences, "train", subsample_data)
+        self.val_dataset = PikaDataset(metadata, sequences, "val")
 
         metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")
         metrics_df.reset_index(inplace=True)
         metrics_df.rename(columns={"index": "uniprot_id"}, inplace=True)
 
         metrics_df = pd.merge(metrics_df, metadata[["uniprot_id", "split"]], on="uniprot_id")
-        self.val_metric_dataset = CPrtMetricDataset(metrics_df, sequences, "val")
+        self.val_metric_dataset = PikaLiteDataset(metrics_df, sequences, "val")
 
     def train_dataloader(self) -> DataLoader:  # type: ignore[type-arg]
         """Set up train loader."""
@@ -168,7 +168,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         return tuple(
             [
                 DataLoader(
-                    CPrtTestDataset(self.test_df, self.test_sequences, subject),
+                    PikaReActDataset(self.test_df, self.test_sequences, subject),
                     batch_size=self.eval_batch_size,
                     collate_fn=self.metric_collate_fn,
                     num_workers=self.num_workers,
@@ -177,7 +177,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
             ]
         )
 
-    def data_collate_fn(self, batch: List[Tuple[str, str]]) -> CPrtData:
+    def data_collate_fn(self, batch: List[Tuple[str, str]]) -> PikaData:
         """Collate, pad and tokenize protein and info strings."""
         protein_sequences, info_list = zip(*batch)
         info_list = [f"{self.sequence_placeholder} {i}{self.text_tokenizer.eos_token}" for i in info_list]
@@ -193,14 +193,14 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
         for i, pad_idx in enumerate((1 - tokenized_info["attention_mask"]).sum(1)):
             if pad_idx > 0:
                 labels[i, -pad_idx:] = -100
-        return CPrtData(
+        return PikaData(
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             info=tokenized_info["input_ids"],
             info_mask=tokenized_info["attention_mask"],
             labels=labels,
         )
 
-    def metric_collate_fn(self, batch: List[Tuple[str, str, str, str | int]]) -> CPrtMetricData:
+    def metric_collate_fn(self, batch: List[Tuple[str, str, str, str | int]]) -> PikaMetricData:
         """Collate, pad and tokenize protein and metric information."""
         protein_sequences, questions, metric_list, values = zip(*batch)
         questions = [f"{self.sequence_placeholder} {i}" for i in questions]
@@ -211,7 +211,7 @@ class CPrtDataModule(LightningDataModule):  # type: ignore[misc]
             truncation=True,
             max_length=self.max_text_length,
         )
-        return CPrtMetricData(
+        return PikaMetricData(
             protein=self.protein_tokenizer(protein_sequences, padding=True, return_tensors="pt")["input_ids"],
             question=tokenized_questions["input_ids"],
             metric_name=metric_list,

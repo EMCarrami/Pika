@@ -1,13 +1,17 @@
 import argparse
 import json
+import os
 import subprocess
 import time
 from ast import literal_eval
 from typing import Any, Dict
 
 import wandb
+from lightning import Callback, Trainer
+from loguru import logger
 
-from cprt.utils import ROOT
+from pika.model.pika_model import PikaModel
+from pika.utils import ROOT
 
 
 def gpu_usage_logger(wandb_config: Dict[str, str], gpu_id: int, log_interval: float = 0.1) -> None:
@@ -63,3 +67,37 @@ def load_config(path: str) -> Dict[str, Any]:
     with open(absolute_path, "r") as f:
         config: Dict[str, Any] = json.load(f)
     return config
+
+
+class ExceptionHandlerCallback(Callback):  # type: ignore[misc]
+    """Callback to handle exceptions."""
+
+    def on_exception(self, trainer: Trainer, model: PikaModel, exception: Exception) -> None:
+        """Run final logs."""
+        model.on_train_epoch_end()
+
+
+def get_output_file_path(config: Dict[str, Any]) -> str:
+    """Get output file path and create directories."""
+    if "save_file_path" in config:
+        out_file = config["save_file_path"]
+        if out_file == "auto":
+            save_dir = "test_results"
+            file_name = config["checkpoint"]["path"].split("/")[-1].split(".")[0]
+            if "name" in config["wandb"]:
+                file_name = f"{config['wandb']['name']}_{file_name.split('_')[-1]}"
+            out_file = f"{save_dir}/{file_name}.tsv"
+        else:
+            assert out_file.endswith(".tsv"), "only csv format is supported"
+            if len(out_file.split("/")) > 1:
+                save_dir = "/".join(out_file.split("/")[:-1])
+            else:
+                save_dir = "test_results"
+                out_file = f"{save_dir}/{out_file}"
+        assert not os.path.isfile(out_file), f"{out_file} already exists"
+        os.makedirs(save_dir, exist_ok=True)
+        logger.info(f"predicted texts will be saved in {out_file}")
+        assert isinstance(out_file, str)
+        return out_file
+    else:
+        return ""

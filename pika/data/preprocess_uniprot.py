@@ -8,7 +8,7 @@ from typing import Dict, List, Union, cast
 import requests
 from tqdm import tqdm
 
-from cprt.utils import DATA_PATH
+from pika.utils import DATA_PATH
 
 
 def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
@@ -17,9 +17,7 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
     url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.xml"
     response = requests.get(url)
     if response.status_code != 200:
-        raise ValueError(
-            f"Unexpected status code {response.status_code} for {uniprot_id}"
-        )
+        raise ValueError(f"Unexpected status code {response.status_code} for {uniprot_id}")
     ns = {"uniprot": "http://uniprot.org/uniprot"}
     root = ET.fromstring(response.content)
     entry = root.find(".//uniprot:entry", ns)
@@ -101,10 +99,7 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
                     if field is not None:
                         out[k] = [field.text]
             # Ignore subcellular location from isoforms
-            elif (
-                comment_type == "subcellular location"
-                and comment.find("./uniprot:molecule", ns) is not None
-            ):
+            elif comment_type == "subcellular location" and comment.find("./uniprot:molecule", ns) is not None:
                 continue
             else:
                 for field_path in field_mapping[comment_type]:
@@ -116,9 +111,7 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
                             out[comment_type].append(f"EC = {value}")
                     else:
                         for field in comment.findall(field_path, ns):
-                            out[comment_type].append(
-                                re.sub(ref_pattern, "", cast(str, field.text))
-                            )
+                            out[comment_type].append(re.sub(ref_pattern, "", cast(str, field.text)))
 
     # Extract 'dbReference' elements
     for dbReference in entry.findall(".//uniprot:dbReference", ns):
@@ -128,12 +121,8 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
                 element = dbReference.find("./uniprot:property[@type='term']", ns)
                 if element is not None:
                     element_value = element.get("value")
-                    if isinstance(element_value, str) and element_value.startswith(
-                        "F:"
-                    ):
-                        out["functional domains"].append(
-                            element_value.replace("F:", "")
-                        )
+                    if isinstance(element_value, str) and element_value.startswith("F:"):
+                        out["functional domains"].append(element_value.replace("F:", ""))
             else:
                 element = dbReference.find("./uniprot:property[@type='entry name']", ns)
                 if element is not None:
@@ -145,8 +134,7 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
             description = feature.get("description")
             # Ignore 'region of interest' with description 'Disordered' or starting with 'required'
             if description is None or (
-                feature_type == "region of interest"
-                and any([i in description.lower() for i in roi_ignore_kw])
+                feature_type == "region of interest" and any([i in description.lower() for i in roi_ignore_kw])
             ):
                 continue
             begin_elem = feature.find("./uniprot:location/uniprot:begin", ns)
@@ -183,8 +171,7 @@ def get_uniprotkb_reviewed_info_in_chunks(
     total_rows = 570_000
     max_num_chunks = total_rows // chunk_size + 1
     assert 0 < chunk < max_num_chunks + 1, (
-        f"chunk can be between 1 and {max_num_chunks}. "
-        f"Each chunk covers {chunk_size} entries"
+        f"chunk can be between 1 and {max_num_chunks}. " f"Each chunk covers {chunk_size} entries"
     )
     start_line = (chunk - 1) * 100_000 + 1
     end_line = chunk * 100_000
@@ -203,9 +190,7 @@ def get_uniprotkb_reviewed_info_in_chunks(
             for line in f:
                 processed_ids.append(line.split("\t")[0])
                 batch_count = int(line.split("\t")[-1])
-        print(
-            f"found {len(processed_ids)} processed ids and {batch_count} batches for chunk {chunk}"
-        )
+        print(f"found {len(processed_ids)} processed ids and {batch_count} batches for chunk {chunk}")
 
     batch, status = {}, []
     batch_count += 1
@@ -224,9 +209,7 @@ def get_uniprotkb_reviewed_info_in_chunks(
             status.append([idx, "pass", len(values) - 4, chunk, batch_count])
 
         if len(batch) == batch_size:
-            with open(
-                f"{chunks_path}/chunk_{chunk}_batch_{batch_count}.pkl", "wb"
-            ) as file:
+            with open(f"{chunks_path}/chunk_{chunk}_batch_{batch_count}.pkl", "wb") as file:
                 pickle.dump(batch, file)
             with open(tracker_file_name, "a") as f:
                 for row in status:

@@ -6,10 +6,10 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+import wandb
 from loguru import logger
 
-import wandb
-from cprt.utils.chatgpt_processor import GPTProcessor
+from pika.utils.chatgpt_processor import GPTProcessor
 
 FIRST = "Please take a deep breath and with care and attention to details answer the following question.\n"
 INSTRUCTIONS = {

@@ -8,14 +8,14 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
 
-from cprt.data.cprt_torch_datasets import shuffle_protein
-from cprt.data.data_utils import load_data_from_path, random_split_df
+from pika.data.data_utils import load_data_from_path, random_split_df
+from pika.datamodule.datamodule_helpers import shuffle_protein
 
 ClassificationData = namedtuple("ClassificationData", ["protein_ids", "labels"])
 
 
 class ClassificationDataModule(LightningDataModule):  # type: ignore[misc]
-    """Data module and collator for CPrtData."""
+    """Data module and collator for PikaData."""
 
     def __init__(
         self,

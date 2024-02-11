@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cprt.utils import DATA_PATH, ROOT
+from pika.utils import DATA_PATH, ROOT
 
 BASE_FIELDS = ["taxonomy", "protein size"]
 

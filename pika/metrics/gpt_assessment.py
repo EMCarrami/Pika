@@ -111,7 +111,11 @@ def harmonise_gpt_results(result: str) -> str:
 
 
 def gpt_metrics_on_wandb_project(
-    project: str, subjects: List[str] | None = None, allowed_runs: List[str] | None = None, subsample: float = 1.0
+    project: str,
+    results_table_path: str,
+    subjects: List[str] | None = None,
+    allowed_runs: List[str] | None = None,
+    subsample: float = 1.0,
 ) -> None:
     """Get GPT metrics on all/allowed_runs of the project."""
     subjects = list(INSTRUCTIONS.keys()) if subjects is None else subjects
@@ -129,11 +133,10 @@ def gpt_metrics_on_wandb_project(
                 else:
                     run_data[r.id] = ckpt.replace(".ckpt", ".tsv")
 
-    print(len(run_data))
     for i, path in run_data.items():
         get_gpt_metrics(
-            f"../../test_results/{path}",
-            wandb_project="Cprt-Paper-Tests",
+            table_path=results_table_path,
+            wandb_project=project,
             wandb_run_id=i,
             subjects=subjects,
             subsample=subsample,

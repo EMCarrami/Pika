@@ -1,5 +1,4 @@
-import json
-import os
+from glob import glob
 from typing import Any, Dict, Tuple
 
 import torch
@@ -17,15 +16,9 @@ def load_from_checkpoint(
     config: Dict[str, Any], checkpoint_path: str, is_partial: bool = False
 ) -> Tuple[PikaModel, PikaDataModule]:
     """Load model and datamodule from checkpoint and config."""
-    if os.path.isfile("model_checkpoints/model_checkpoints.json"):
-        with open("model_checkpoints/model_checkpoints.json", "r") as file:
-            checkpoints = json.load(file)
-
-    if checkpoint_path in checkpoints["path"]:
-        artifact_dir = find_wandb_checkpoint(checkpoints["path"][checkpoint_path])
-        config["seed"] = checkpoints["seed"][checkpoint_path]
-        logger.info(f"seed was automatically set to {config['seed']} for wandb model {checkpoint_path}")
-        checkpoint_path = f"{artifact_dir}/{checkpoint_path}"
+    if checkpoint_path.startswith("wandb:"):
+        checkpoint_path = find_wandb_checkpoint(checkpoint_path.replace("wandb:", ""))
+        logger.info(f"using wandb model checkpoint in {checkpoint_path}")
 
     if is_partial:
         model = load_reduced_model(checkpoint_path)
@@ -41,11 +34,14 @@ def load_from_checkpoint(
 
 
 def find_wandb_checkpoint(checkpoint: str) -> str:
-    """Download the model artifact into model_checkpoints."""
+    """Download the model artifact into model_checkpoints and return checkpoint path."""
     api = wandb.Api()
-    artifact = api.artifact(checkpoint, type="model")  # type: ignore[no-untyped-call]
-    artifact_dir: str = artifact.download("model_checkpoints")
-    return artifact_dir
+    artifact = api.artifact(checkpoint, type="model")
+    model_dir = checkpoint.split("/")[-1].replace(":", "_")
+    artifact_dir: str = artifact.download(f"model_checkpoints/{model_dir}")
+    ckpt_file = glob(f"{artifact_dir}/*.ckpt")
+    assert len(ckpt_file) == 1, f"there are more than 1 ckpt file in {artifact_dir}: {ckpt_file}"
+    return ckpt_file[0]
 
 
 def load_reduced_model(checkpoint_path: str) -> PikaModel:

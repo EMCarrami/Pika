@@ -16,9 +16,7 @@ class TestTruncatedTransformer(TestCase):
     """Test truncation of ESM2."""
 
     def setUp(self) -> None:
-        self.pretrained_model, self.alphabet = torch.hub.load(  # type: ignore[no-untyped-call]
-            "facebookresearch/esm:main", "esm2_t6_8M_UR50D"
-        )
+        self.pretrained_model, self.alphabet = torch.hub.load("facebookresearch/esm:main", "esm2_t6_8M_UR50D")
         self.protein_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t6_8M_UR50D")
         self.layer_to_keep = 2
         self.truncated_model = TruncatedESM2(self.pretrained_model, self.layer_to_keep)

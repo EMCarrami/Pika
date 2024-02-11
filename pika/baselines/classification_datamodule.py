@@ -14,7 +14,7 @@ from pika.datamodule.datamodule_helpers import shuffle_protein
 ClassificationData = namedtuple("ClassificationData", ["protein_ids", "labels"])
 
 
-class ClassificationDataModule(LightningDataModule):  # type: ignore[misc]
+class ClassificationDataModule(LightningDataModule):
     """Data module and collator for PikaData."""
 
     def __init__(

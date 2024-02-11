@@ -16,6 +16,7 @@ def run_biochem_react_metrics(config: Dict[str, Any]) -> None:
     if "wandb" in config:
         wandb_logger = WandbLogger(**config["wandb"])
         trainer = Trainer(logger=wandb_logger, **config["trainer"])
+        assert isinstance(trainer.logger, WandbLogger)
         trainer.logger.log_hyperparams(config)
     else:
         trainer = Trainer(**config["trainer"])

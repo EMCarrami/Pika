@@ -18,7 +18,7 @@ PikaData = namedtuple("PikaData", ["protein", "info", "info_mask", "labels"])
 PikaMetricData = namedtuple("PikaMetricData", ["protein", "question", "metric_name", "expected_value"])
 
 
-class PikaDataModule(LightningDataModule):  # type: ignore[misc]
+class PikaDataModule(LightningDataModule):
     """Data module and collator for PikaData."""
 
     test_df: pd.DataFrame | None

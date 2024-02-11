@@ -6,7 +6,7 @@ import torch
 import wandb
 from lightning import LightningModule
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.utilities import rank_zero_only
+from lightning_utilities.core.rank_zero import rank_zero_only
 from loguru import logger
 from torch import Tensor
 from torch.optim import Optimizer
@@ -27,7 +27,7 @@ from pika.model.pika_modules import (
 )
 
 
-class PikaModel(LightningModule):  # type: ignore[misc]
+class PikaModel(LightningModule):
     """Pika Lightning model."""
 
     MultiModalLayer: Type[CrossPikaAttentionLayer] | Type[SelfPikaLayer]
@@ -78,7 +78,7 @@ class PikaModel(LightningModule):  # type: ignore[misc]
     def configure_protein_model(self) -> None:
         """Configure ESM2 model."""
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{self.protein_model}")
-        esm, _ = torch.hub.load("facebookresearch/esm:main", self.protein_model)  # type: ignore[no-untyped-call]
+        esm, _ = torch.hub.load("facebookresearch/esm:main", self.protein_model)
         self.esm = TruncatedESM2(esm, self.protein_layer_to_use)
         self.esm.eval()
         for param in self.esm.parameters():
@@ -250,11 +250,9 @@ class PikaModel(LightningModule):  # type: ignore[misc]
     def on_test_end(self) -> None:
         """Log test outcomes to wandb."""
         if isinstance(self.logger, WandbLogger):
-            test_table = wandb.Table(  # type: ignore[no-untyped-call]
-                columns=["uniprot_id", "subject", "expected_answer", "generated_response"]
-            )
+            test_table = wandb.Table(columns=["uniprot_id", "subject", "expected_answer", "generated_response"])
             for v in self.test_results:
-                test_table.add_data(*v)  # type: ignore[no-untyped-call]
+                test_table.add_data(*v)
             wandb.log({"Biochem-ReAct_results": test_table})
 
     def log_example_outputs(self, output_text: List[str], batch: PikaMetricData) -> None:
@@ -289,15 +287,13 @@ class PikaModel(LightningModule):  # type: ignore[misc]
         """Log generation examples table."""
         self.log_wandb_table()
 
-    @rank_zero_only  # type: ignore[misc]
+    @rank_zero_only
     def log_wandb_table(self) -> None:
         """Log wandb table of example outputs."""
         if isinstance(self.logger, WandbLogger):
-            text_table = wandb.Table(  # type: ignore[no-untyped-call]
-                columns=["global_step", "question", "expected_answer", "generated_response"]
-            )
+            text_table = wandb.Table(columns=["global_step", "question", "expected_answer", "generated_response"])
             for v in self.val_example_outputs.values():
-                text_table.add_data(*v.values())  # type: ignore[no-untyped-call]
+                text_table.add_data(*v.values())
             wandb.log({f"val_generation_{self.current_epoch}": text_table})
 
     def configure_optimizers(self) -> Optimizer | Tuple[List[Optimizer], List[Dict[str, Any]]]:
@@ -306,6 +302,7 @@ class PikaModel(LightningModule):  # type: ignore[misc]
         if self.schedulers is None:
             return optimizer
         else:
+            assert hasattr(self.trainer, "datamodule")
             total_samples = len(self.trainer.datamodule.train_dataloader().dataset)
             batch_size = self.trainer.datamodule.train_batch_size
             accumulate_grad_batches = self.trainer.accumulate_grad_batches
@@ -326,7 +323,7 @@ class PikaModel(LightningModule):  # type: ignore[misc]
         self.val_perplexity = Perplexity(ignore_index=-100)
         self.val_rouge_scores = ROUGEScore()
         self.val_biochem = BiochemLiteMetrics()
-        self.val_example_outputs: Dict[str, Dict[str, str]] = OrderedDict()
+        self.val_example_outputs: Dict[str, Dict[str, str | int]] = OrderedDict()
 
     @torch.no_grad()
     def get_response(

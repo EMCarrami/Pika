@@ -198,5 +198,5 @@ class PositionalEncoding1D(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         """Add positional encoding to each element in the batch."""
-        x = x + self.pe[:, : x.size(1)]  # type: ignore[index]
+        x: Tensor = x + self.pe[:, : x.size(1)]
         return x

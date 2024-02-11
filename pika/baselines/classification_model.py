@@ -9,7 +9,7 @@ from pika.baselines.classification_datamodule import ClassificationData
 from pika.model.helper_modules import TruncatedESM2
 
 
-class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
+class ProteinClassificationModel(LightningModule):
     """Protein Classification Baseline Model."""
 
     criterion: nn.Module
@@ -42,7 +42,7 @@ class ProteinClassificationModel(LightningModule):  # type: ignore[misc]
             for s in ["train", "val", "test"]:
                 setattr(self, f"{s}_metric", MeanAbsoluteError())
 
-        esm, _ = torch.hub.load("facebookresearch/esm:main", self.protein_model)  # type: ignore[no-untyped-call]
+        esm, _ = torch.hub.load("facebookresearch/esm:main", self.protein_model)
         self.esm = TruncatedESM2(esm, self.protein_layer_to_use)
         self.esm.eval()
         for param in self.esm.parameters():

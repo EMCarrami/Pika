@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import wandb
 from lightning import Trainer, seed_everything
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 
 from pika.baselines.classification_datamodule import ClassificationDataModule
@@ -33,7 +33,7 @@ def train_pika(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
     group_name = f"{multimodal_strategy}_{config['model']['protein_model']}_{config['model']['language_model']}"
     group_name = group_name.replace("/", "_")
 
-    callbacks = []
+    callbacks: List[Callback] = []
     save_checkpoints = config["trainer"].pop("save_checkpoints", [])
     checkpoint_path = config["trainer"].pop("checkpoint_path", "model_checkpoints")
     time_stamp = datetime.now().strftime("%y%m%d%H%M%S")
@@ -63,6 +63,7 @@ def train_pika(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
         config["wandb"]["group"] = group_name
         wandb_logger = WandbLogger(**config["wandb"])
         trainer = Trainer(logger=wandb_logger, callbacks=callbacks, **config["trainer"])
+        assert isinstance(trainer.logger, WandbLogger)
         trainer.logger.log_hyperparams(config)
         trainer.fit(model, datamodule)
         wandb.finish()
@@ -90,6 +91,7 @@ def train_classifier(config: Dict[str, Any], log_to_wandb: bool = False) -> None
         config["wandb"]["group"] = group_name
         wandb_logger = WandbLogger(**config["wandb"])
         trainer = Trainer(logger=wandb_logger, **config["trainer"])
+        assert isinstance(trainer.logger, WandbLogger)
         trainer.logger.log_hyperparams(config)
         trainer.fit(model, datamodule)
         wandb.finish()

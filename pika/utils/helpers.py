@@ -7,13 +7,11 @@ from ast import literal_eval
 from typing import Any, Dict
 
 import wandb
-from lightning import Callback, Trainer
+from lightning import Callback, LightningModule, Trainer
 from loguru import logger
 
-from pika.model.pika_model import PikaModel
 
-
-def gpu_usage_logger(wandb_config: Dict[str, str], gpu_id: int, log_interval: float = 0.1) -> None:
+def gpu_usage_logger(wandb_config: Dict[str, Any], gpu_id: int, log_interval: float = 0.1) -> None:
     """Log gpu usage every second to wandb."""
     wandb.init(**wandb_config, resume="allow")
     while True:
@@ -62,10 +60,10 @@ def load_config(path: str) -> Dict[str, Any]:
     return config
 
 
-class ExceptionHandlerCallback(Callback):  # type: ignore[misc]
+class ExceptionHandlerCallback(Callback):
     """Callback to handle exceptions."""
 
-    def on_exception(self, trainer: Trainer, model: PikaModel, exception: Exception) -> None:
+    def on_exception(self, trainer: Trainer, model: LightningModule, exception: BaseException) -> None:
         """Run final logs."""
         model.on_train_epoch_end()
 

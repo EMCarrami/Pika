@@ -36,7 +36,7 @@ jobs:
 
     - name: Lint with flake8
       run: |
-        flake8 .
+        flake8 . --exclude=pika/model/original_phi
 
     - name: Type check with mypy
       run: |

@@ -44,14 +44,7 @@ class BiochemMetrics(Metric):
                 self.numeric_preds.append((f"{name}_error", abs(np.log10(pred_size / label))))
             elif isinstance(label, str):
                 label = label.lower()
-                if name == "kingdom":
-                    if "virus" not in label:
-                        # only checking for the presence of first 4 letters
-                        # arch(aea), bact(eria), euka(ryota)
-                        all_kingdoms = [i for i in ["archaea", "bacteria", "eukaryota"] if i[:4] in pred]
-                        pred_kingdom = all_kingdoms[0] if len(all_kingdoms) == 1 else "none"
-                        self.class_preds.append((name, label, pred_kingdom))
-                elif name == "localization":
+                if name == "localization":
                     if label != "none":
                         # only checking for the presence of first 5 letters
                         # membr(ane), nucle(us), mitoc(hondrion)
@@ -70,7 +63,7 @@ class BiochemMetrics(Metric):
                             self.numeric_preds.append((name, 0))
                 else:
                     raise ValueError(
-                        "currently only supports kingdom, cofactor and localization str metrics. "
+                        "currently only supports cofactor and localization str metrics. "
                         f"value {label} for metric {name} was given"
                     )
             else:

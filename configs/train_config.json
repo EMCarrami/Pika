@@ -24,12 +24,13 @@
     "weight_decay": 1e-4
   },
   "wandb": {
-    "project": "Paper-Exp-0"
+    "project": "Paper-Exp-0",
+    "log_model": "all"
   },
   "checkpoint_callback": {
     "save_partial_checkpoints": true,
-    "checkpoint_monitors": ["loss/val_loss"],
-    "checkpoint_modes": ["min"]
+    "checkpoint_monitors": ["Biochem-Lite/val_cofactor", "loss/val_loss"],
+    "checkpoint_modes": ["max", "min"]
   },
   "trainer": {
     "precision": "16-mixed",

@@ -6,9 +6,11 @@ import time
 from ast import literal_eval
 from typing import Any, Dict
 
-import wandb
 from lightning import Callback, LightningModule, Trainer
+from lightning.pytorch.loggers import WandbLogger
 from loguru import logger
+
+import wandb
 
 
 def gpu_usage_logger(wandb_config: Dict[str, Any], gpu_id: int, log_interval: float = 0.1) -> None:
@@ -66,6 +68,9 @@ class ExceptionHandlerCallback(Callback):
     def on_exception(self, trainer: Trainer, model: LightningModule, exception: BaseException) -> None:
         """Run final logs."""
         model.on_train_epoch_end()
+        # to trigger checkpoint upload
+        if isinstance(trainer.logger, WandbLogger):
+            trainer.logger.finalize("success")
 
 
 def get_output_file_path(config: Dict[str, Any]) -> str:

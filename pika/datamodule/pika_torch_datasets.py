@@ -17,7 +17,6 @@ class PikaDataset(Dataset[Tuple[str, str]]):
         metadata: pd.DataFrame,
         sequences: Dict[str, str],
         split: Literal["train", "val", "test"],
-        subsample_data: float = 1.0,
     ) -> None:
         """
         Initialize dataset.
@@ -32,9 +31,6 @@ class PikaDataset(Dataset[Tuple[str, str]]):
         logger.info(f"preparing {split} dataset")
         self.split = split
         self.split_df = metadata[metadata.split == self.split][["uniprot_id", "examples"]]
-        if subsample_data != 1:
-            logger.info(f"{subsample_data * 100}% of {len(metadata)} samples will be used for {split} split")
-            self.split_df = self.split_df.sample(frac=subsample_data)
         self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
         self.split_df = self.split_df.explode("examples", ignore_index=True)
 

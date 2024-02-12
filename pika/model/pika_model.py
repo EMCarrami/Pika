@@ -7,7 +7,6 @@ import wandb
 from lightning import LightningModule
 from lightning.pytorch.loggers import WandbLogger
 from lightning_utilities.core.rank_zero import rank_zero_only
-from loguru import logger
 from torch import Tensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
@@ -247,14 +246,6 @@ class PikaModel(LightningModule):
             self.test_results.append([uid, s, e, p])
         torch.cuda.empty_cache()
 
-    def on_test_end(self) -> None:
-        """Log test outcomes to wandb."""
-        if isinstance(self.logger, WandbLogger):
-            test_table = wandb.Table(columns=["uniprot_id", "subject", "expected_answer", "generated_response"])
-            for v in self.test_results:
-                test_table.add_data(*v)
-            wandb.log({"Biochem-ReAct_results": test_table})
-
     def log_example_outputs(self, output_text: List[str], batch: PikaMetricData) -> None:
         """
         Log example generated responses.
@@ -365,31 +356,3 @@ class PikaModel(LightningModule):
                 txt = self.text_tokenizer.decode(pred[pos_offset:].cpu(), skip_special_tokens=False)
                 out.append(txt.split("<|endoftext|>")[0])
         return out
-
-    @torch.no_grad()
-    def enquire(
-        self,
-        proteins: List[str],
-        question: str,
-        generation_length: int = 20,
-        keep_prompt: bool = False,
-        placeholder: str | None = None,
-    ) -> List[str]:
-        """Generate answer to the question for a given protein sequence."""
-        if placeholder is None:
-            if hasattr(self.trainer, "datamodule"):
-                placeholder = self.trainer.datamodule.sequence_placeholder
-                logger.info(f"using datamodules placeholeder {placeholder}")
-            else:
-                placeholder = "<protein sequence placeholder> "
-                logger.info(
-                    f"using default placeholeder {placeholder}. "
-                    f"Ensure this is intended. If not please provide a placeholder."
-                )
-        question = f"{self.sequence_placeholder}{question}"
-        return self.get_response(
-            protein_ids=self.protein_tokenizer(proteins, padding=True, return_tensors="pt")["input_ids"],
-            info_ids=self.text_tokenizer([question] * len(proteins), return_tensors="pt")["input_ids"],
-            generation_length=generation_length,
-            keep_prompt=keep_prompt,
-        )

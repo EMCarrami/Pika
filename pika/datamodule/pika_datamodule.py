@@ -1,5 +1,6 @@
+import pickle
 from collections import namedtuple
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 from lightning import LightningDataModule
@@ -7,7 +8,6 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from pika.data.data_utils import load_data_from_path, random_split_df
 from pika.datamodule.pika_torch_datasets import (
     PikaDataset,
     PikaLiteDataset,
@@ -26,7 +26,7 @@ class PikaDataModule(LightningDataModule):
     def __init__(
         self,
         data_dict_path: str,
-        split_ratios: Tuple[float, float, float],
+        split_path: str,
         protein_model: str,
         language_model: str,
         max_protein_length: int,
@@ -34,7 +34,6 @@ class PikaDataModule(LightningDataModule):
         max_text_length: int = 250,
         data_field_names: str | List[str] = "qa",
         sequence_placeholder: str = "<protein sequence placeholder> ",
-        subsample_data: int | float = 1.0,
         train_batch_size: int = 4,
         eval_batch_size: int | None = None,
         test_subjects: str | List[str] | None = None,
@@ -44,7 +43,7 @@ class PikaDataModule(LightningDataModule):
         Load tokenizers and instantiate datasets.
 
         :param data_dict_path: path to dict of uniprot_ids mapped to all info fields and the sequence
-        :param split_ratios: ratio of train, val and test sets
+        :param split_path: path to csv with mapping of uniprot_id to split: [train, val, test]
         :param protein_model: esm model to use for tokenizer
         :param language_model: language model to use for tokenizer
         :param max_protein_length: max length of protein allowed
@@ -53,7 +52,6 @@ class PikaDataModule(LightningDataModule):
         :param data_field_names: name of data fields to use for training (must be present in data_dict)
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
                                 will be ignored in loss computation by setting label to -100
-        :param subsample_data: ratio of the data or number of samples to process.
         :param train_batch_size: train batch size
         :param eval_batch_size: size of val/test batch size. If unspecified will be 4 * train_batch_size
         :param test_subjects: scientific subjects for which tests must be performed.
@@ -65,6 +63,9 @@ class PikaDataModule(LightningDataModule):
         rev = "main"
         if "phi" in language_model:
             rev = "7e10f3ea09c0ebd373aebc73bc6e6ca58204628d"
+        if isinstance(data_field_names, str):
+            data_field_names = [data_field_names]
+
         self.num_workers = num_workers
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
@@ -76,26 +77,32 @@ class PikaDataModule(LightningDataModule):
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         self.max_text_length = max_text_length
 
-        # Duplicate text_tokenizer is to allow for parallel tokenization using fast tokenizers
+        # duplicate text_tokenizer is to allow for parallel tokenization using fast tokenizers
         _text_tokenizer = AutoTokenizer.from_pretrained(language_model, use_fast=False, revision=rev)
         self.placeholder_length = len(_text_tokenizer(sequence_placeholder)["input_ids"])
         self.sequence_placeholder = sequence_placeholder
 
-        logger.info(f"loading {data_dict_path}")
-        if isinstance(data_field_names, str):
-            data_field_names = [data_field_names]
-        data_dict = load_data_from_path(data_dict_path)
+        # load data
+        logger.info(f"loading data from {data_dict_path}")
+        with open(data_dict_path, "rb") as f:
+            data_dict: Dict[str, Any] = pickle.load(f)
         sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
 
-        metadata = pd.DataFrame(data_dict.keys(), columns=["uniprot_id"])
-        # TODO: remove after experiments
-        metadata = metadata.sample(frac=1.0)
+        # set up splits
+        logger.info(f"loading splits from {split_path}")
+        metadata = pd.read_csv(split_path)
+        assert (
+            "uniprot_id" in metadata.columns and "split" in metadata.columns
+        ), "split_path must be a csv file with column headers providing uniprot_id and split"
+        assert all([i in data_dict for i in metadata["uniprot_id"]]), (
+            f"all uniprot_id of {split_path} must be present in {data_dict_path}. "
+            f"missing keys: {set(metadata['uniprot_id'].to_list()) - set(data_dict.keys())}"
+        )
         metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
         metadata.loc[:, "uniref_id"] = metadata["uniprot_id"].apply(lambda x: data_dict[x]["uniref_id"])
         metadata = metadata[metadata["protein_length"] < max_protein_length]
         metadata = metadata[metadata["protein_length"] > min_protein_length]
         metadata.reset_index(drop=True, inplace=True)
-        random_split_df(metadata, split_ratios, key="uniref_id")
 
         # prepare test sets if needed
         self.test_df = None
@@ -120,7 +127,7 @@ class PikaDataModule(LightningDataModule):
             uid: [v for fn in data_field_names for v in fields[fn]] for uid, fields in data_dict.items()
         }
         metadata.loc[:, "examples"] = metadata["uniprot_id"].apply(lambda x: data_fields[x])
-        self.train_dataset = PikaDataset(metadata, sequences, "train", subsample_data)
+        self.train_dataset = PikaDataset(metadata, sequences, "train")
         self.val_dataset = PikaDataset(metadata, sequences, "val")
 
         metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")

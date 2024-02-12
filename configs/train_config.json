@@ -1,13 +1,12 @@
 {
   "seed": 7,
   "datamodule": {
-    "data_dict_path": "uniref50_gpt_data.pkl",
-    "split_ratios": [0.945, 0.005, 0.05],
+    "data_dict_path": "dataset/uniref50_gpt_data.pkl",
+    "split_path": "dataset/split_0.csv",
     "max_protein_length": 1500,
     "max_text_length": 250,
     "data_field_names": "qa",
     "sequence_placeholder": "<protein sequence placeholder> ",
-    "subsample_data": 1.0,
     "train_batch_size": 8,
     "eval_batch_size": 32,
     "num_workers": 4
@@ -15,7 +14,7 @@
   "model": {
     "language_model": "microsoft/phi-2",
     "protein_model": "esm2_t33_650M_UR50D",
-    "multimodal_strategy": "soft-prompt",
+    "multimodal_strategy": "self-pika",
     "protein_layer_to_use": -1,
     "perceiver_latent_size": 100,
     "num_perceiver_layers": 4,
@@ -25,10 +24,14 @@
     "weight_decay": 1e-4
   },
   "wandb": {
-    "project": "Cprt-Paper-Exp-0"
+    "project": "Paper-Exp-0"
+  },
+  "checkpoint_callback": {
+    "save_partial_checkpoints": true,
+    "checkpoint_monitors": ["loss/val_loss"],
+    "checkpoint_modes": ["min"]
   },
   "trainer": {
-    "save_checkpoints": ["loss", "f1"],
     "precision": "16-mixed",
     "val_check_interval": 0.2,
     "max_epochs": 5,

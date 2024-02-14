@@ -3,16 +3,136 @@ import pickle
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Union, cast
 
+import numpy as np
+import pandas as pd
 import requests
+from loguru import logger
 from tqdm import tqdm
 
-from pika.utils import DATA_PATH
+from cprt.data.data_utils import file_path_assertions
+
+
+def get_all_uniprot_info_in_parallel(
+    path_to_swissprot_records: str = "dataset/uniprotkb_reviewed_true_2023_08_14.tsv",
+    out_file_path: str = "dataset/swissprot_data_2023_08_14.pkl",
+    min_protein_length: int = 30,
+    ignore_no_info_entries: bool = True,
+    batch_size: int = 10_000,
+    num_workers: int = 20,
+    temp_folder: str = "dataset/chunks",
+) -> None:
+    """
+    Download and process the info for all uniprot_ids in a .tsv file and merge the final outputs.
+
+    :param path_to_swissprot_records: Path to the tsv file containing uniprot_ids with 'Entry' and 'Length' as headers.
+                                      Length will be used to filter out proteins shorter than min_protein_length.
+    :param out_file_path: Path where the final merged dataset file will be saved.
+                          The file must have a .pkl extension and not already exist.
+    :param min_protein_length: Minimum length of proteins to be included in the dataset.
+                               Proteins shorter than this will be excluded.
+    :param ignore_no_info_entries: Whether to ignore entries without any info aside from taxonomy, size and sequence
+    :param batch_size: Number of records to process in parallel in each batch.
+    :param num_workers: Number of worker threads to use for parallel processing.
+                        A value of 0 means processing will be done serially.
+    :param temp_folder: Path to the folder where temporary chunk files will be stored during processing.
+
+    :return: None. The function saves the output file at out_file_path.
+    Output Example:
+    {'A0A009IHW8': {
+            'taxonomy': ['Bacteria', 'Pseudomonadota', 'Gammaproteobacteria'],
+            'protein size': ['269 aa', '30922 KDa'],
+            'sequence': ['MSLEQKKGADIISKILQIQNSIGKTTSP ... '],
+            'catalytic activity': ['H2O + NAD(+) = ADP-D-ribose + H(+) + nicotinamide', 'EC = 3.2.2.6'],
+            'subunit': ['Homodimer', conformational changes occur upon 3AD binding.'],
+            'functional domains': ['NAD(P)+ nucleosidase activity', 'NAD+ nucleosidase activity', ...]
+        }
+    }
+    """
+    base_name, _ = file_path_assertions(out_file_path, exists_ok=False, strict_extension=".pkl")
+    os.makedirs(temp_folder, exist_ok=True)
+
+    try:
+        df = pd.read_csv(path_to_swissprot_records, sep="\t")[["Entry", "Length"]]
+    except KeyError as e:
+        raise Exception(
+            f"{e} swissprot_records file must be tab-separated with a header including 'Entry' and 'Length' columns."
+        )
+    df = df[df["Length"] >= min_protein_length]
+
+    n_chunks = len(df) // batch_size + (1 if len(df) % batch_size else 0)
+    df_chunks = np.array_split(df, n_chunks)
+    uid_lists, all_temps, unprocessed_names = [], [], []
+    for idx, chunk in enumerate(df_chunks):
+        assert isinstance(chunk, pd.DataFrame)
+        chunk_file_name = f"{temp_folder}/{base_name}_{idx}_{chunk.index.start}-{chunk.index.stop}.pkl"
+        all_temps.append(chunk_file_name)
+        if os.path.isfile(chunk_file_name):
+            logger.info(f"chunk {idx} already processed in file {chunk_file_name} ... Skipping.")
+        else:
+            unprocessed_names.append(chunk_file_name)
+            uid_lists.append(chunk["Entry"].to_list())
+
+    if num_workers > 0:
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            logger.info(f"submitting {len(uid_lists)} tasks to {num_workers} workers.")
+            futures = [
+                executor.submit(get_info_for_uniprot_ids, uids, fn) for uids, fn in zip(uid_lists, unprocessed_names)
+            ]
+            for future in tqdm(as_completed(futures), total=len(futures)):
+                try:
+                    future.result()
+                except Exception as exc:
+                    for f in futures:
+                        f.cancel()
+                    raise Exception from exc
+    else:
+        for uids, fn in zip(uid_lists, unprocessed_names):
+            get_info_for_uniprot_ids(uids, fn)
+
+    merged_dict = {}
+    for fn in tqdm(all_temps):
+        with open(fn, "rb") as file:
+            data = pickle.load(file)
+        if ignore_no_info_entries:
+            # keep only entries that have more than the 3 fields of taxonomy, protein size, and sequence
+            data = {k: v for k, v in data.items() if len(v) > 3}
+        merged_dict.update(data)
+    with open(out_file_path, "wb") as output_file:
+        pickle.dump(merged_dict, output_file)
+
+
+def get_info_for_uniprot_ids(
+    uniprot_ids: List[str],
+    out_file_path: str,
+) -> None:
+    """Download, pre-process and save data for a list of uniprot_ids from uniprot API."""
+    file_path_assertions(out_file_path, exists_ok=True)
+
+    batch = {}
+    for idx in tqdm(uniprot_ids):
+        batch[idx] = preprocess_uniprot(idx)
+    with open(out_file_path, "wb") as f:
+        pickle.dump(batch, f)
 
 
 def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
-    """Get xml from uniprot and preprocess data fields."""
+    """
+    Get xml from uniprot and preprocess data fields.
+
+    For each entry extracts the following:
+    sequence (molecular mass and length)
+    organism (top three taxonomic levels)
+    catalytic activity (including EC number)
+    biophysicochemical properties (pH and temperature dependence)
+    cofactor
+    subunit (excluding fields containing “interact”, “associate”, or “complex”)
+    subcellular location (excluding isoforms)
+    functional domains: GO (only molecular function, omitting biological process and cellular component),
+                        Gene3D, and SUPFAM
+    """
     out = defaultdict(list)
     url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.xml"
     response = requests.get(url)
@@ -33,7 +153,6 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
     # Find the 'sequence' element and extract the 'length', 'mass', and sequence text
     sequence_elem = entry.find("./uniprot:sequence", ns)
     if sequence_elem is not None:
-        out["length"] = [sequence_elem.get("length")]
         out["protein size"] = [
             f"{out['length']} aa",
             f"{sequence_elem.get('mass')} KDa",
@@ -154,101 +273,3 @@ def preprocess_uniprot(uniprot_id: str) -> Union[Dict[str, List[str]], None]:
             else:
                 out[feature_type].append(f"{description}: {'-'.join(location)}")  # type: ignore[arg-type]
     return out  # type: ignore[return-value]
-
-
-def get_uniprotkb_reviewed_info_in_chunks(
-    chunk: int,
-    chunk_size: int = 100_000,
-    batch_size: int = 1000,
-    file_date: str = "2023_08_14",
-    out_folder_name: str = "data_chunks",
-) -> None:
-    """Store pre-processed data from uniprot API based on uniprotkb_reviewed_true_{date}.tsv list."""
-    tracker_file_name = f"{DATA_PATH}/{out_folder_name}/chunk_{chunk}_processed_ids.tsv"
-    chunks_path = f"{DATA_PATH}/{out_folder_name}/chunks"
-    os.makedirs(chunks_path, exist_ok=True)
-
-    total_rows = 570_000
-    max_num_chunks = total_rows // chunk_size + 1
-    assert 0 < chunk < max_num_chunks + 1, (
-        f"chunk can be between 1 and {max_num_chunks}. " f"Each chunk covers {chunk_size} entries"
-    )
-    start_line = (chunk - 1) * 100_000 + 1
-    end_line = chunk * 100_000
-
-    ids, lens = [], []
-    with open(f"{DATA_PATH}/uniprotkb_reviewed_true_{file_date}.tsv", "r") as f:
-        for line_number, line in enumerate(f):
-            if start_line <= line_number <= end_line:
-                ids.append(line.split("\t")[0])
-                lens.append(int(line.split("\t")[-1]))
-
-    batch_count = 0
-    processed_ids = []
-    if os.path.isfile(tracker_file_name):
-        with open(tracker_file_name, "r") as f:
-            for line in f:
-                processed_ids.append(line.split("\t")[0])
-                batch_count = int(line.split("\t")[-1])
-        print(f"found {len(processed_ids)} processed ids and {batch_count} batches for chunk {chunk}")
-
-    batch, status = {}, []
-    batch_count += 1
-    for idx, length in tqdm(zip(ids, lens), total=len(ids)):
-        if idx in processed_ids:
-            continue
-        if length < 30:
-            status.append([idx, "fail", 0, chunk, batch_count])
-            continue
-
-        values = preprocess_uniprot(idx)
-        if values is None:
-            status.append([idx, "fail", 0, chunk, batch_count])
-        else:
-            batch[idx] = values
-            status.append([idx, "pass", len(values) - 4, chunk, batch_count])
-
-        if len(batch) == batch_size:
-            with open(f"{chunks_path}/chunk_{chunk}_batch_{batch_count}.pkl", "wb") as file:
-                pickle.dump(batch, file)
-            with open(tracker_file_name, "a") as f:
-                for row in status:
-                    f.write("\t".join([str(x) for x in row]))
-                    f.write("\n")
-            batch_count += 1
-            batch, status = {}, []
-
-    if len(batch) > 0:
-        with open(f"{chunks_path}/chunk_{chunk}_batch_{batch_count}.pkl", "wb") as file:
-            pickle.dump(batch, file)
-        with open(tracker_file_name, "a") as f:
-            for row in status:
-                f.write("\t".join([str(x) for x in row]))
-                f.write("\n")
-
-
-def merge_uniprot_data_chunks(
-    chunks_folder_path: str = f"{DATA_PATH}/data_chunks/chunks",
-    out_file_path: str = f"{DATA_PATH}/merged_uniprot_data.pkl",
-) -> None:
-    """Merge all pickle files in chunks path to a new pickle file in out_path."""
-    merged_dict = {}
-    for file_name in tqdm(os.listdir(chunks_folder_path)):
-        file_path = os.path.join(chunks_folder_path, file_name)
-        if file_path.endswith(".pkl"):
-            with open(file_path, "rb") as f:
-                data = pickle.load(f)
-            merged_dict.update(data)
-    with open(out_file_path, "wb") as output_file:
-        pickle.dump(merged_dict, output_file)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--chunk", type=int, help="chunk id")
-
-    args = parser.parse_args()
-    chunk = args.chunk
-    get_uniprotkb_reviewed_info_in_chunks(chunk)

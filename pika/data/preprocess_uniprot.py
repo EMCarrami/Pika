@@ -12,7 +12,7 @@ import requests
 from loguru import logger
 from tqdm import tqdm
 
-from cprt.data.data_utils import file_path_assertions
+from pika.data.data_utils import file_path_assertions
 
 
 def get_all_uniprot_info_in_parallel(

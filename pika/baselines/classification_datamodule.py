@@ -1,5 +1,6 @@
+import pickle
 from collections import namedtuple
-from typing import Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Tuple
 
 import numpy as np
 import pandas as pd
@@ -8,8 +9,8 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
 
-from pika.data.data_utils import load_data_from_path, random_split_df
 from pika.datamodule.datamodule_helpers import shuffle_protein
+from pika.utils.data_utils import random_split_df
 
 ClassificationData = namedtuple("ClassificationData", ["protein_ids", "labels"])
 
@@ -57,7 +58,8 @@ class ClassificationDataModule(LightningDataModule):
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{protein_model}")
         self.protein_tokenizer.model_max_length = max_protein_length
 
-        data_dict = load_data_from_path(data_dict_path)
+        with open(data_dict_path, "rb") as f:
+            data_dict: Dict[str, Any] = pickle.load(f)
         metadata = pd.DataFrame(data_dict.keys(), columns=["uniprot_id"])
 
         # TDOD: remove later

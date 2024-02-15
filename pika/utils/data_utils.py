@@ -1,7 +1,5 @@
-import csv
 import os
-import pickle
-from typing import Any, Dict, Sequence, Tuple, Union
+from typing import Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -35,26 +33,6 @@ def file_path_assertions(file_path: str, exists_ok: bool, strict_extension: str 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     fn, ext = os.path.splitext(base_name)
     return fn, ext
-
-
-def add_line_to_csv(row: Tuple[str, str, str, int, int], out_file_name: str) -> None:
-    """Append a new row to csv file."""
-    with open(out_file_name, "a", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(row)
-
-
-def load_data_from_path(data_path: str) -> Union[pd.DataFrame, Dict[str, Any]]:
-    """Load .pkl dicts or .csv tables."""
-    if data_path.endswith(".pkl") or data_path.endswith(".pickle"):
-        with open(data_path, "rb") as f:
-            data_dict: Dict[str, Any] = pickle.load(f)
-            return data_dict
-    elif data_path.endswith(".csv"):
-        data_df: pd.DataFrame = pd.read_csv(data_path)
-        return data_df
-    else:
-        raise ValueError("only supports .csv and .pkl/.pickle files.")
 
 
 def random_split_df(df: pd.DataFrame, ratios: Sequence[float], key: str = "uniref_id") -> None:

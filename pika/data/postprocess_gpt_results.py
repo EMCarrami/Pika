@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 from loguru import logger
 from tqdm import tqdm
 
-from pika.data.data_utils import file_path_assertions
+from pika.utils.data_utils import file_path_assertions
 
 
 def postprocess_gpt_results(

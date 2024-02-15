@@ -2,6 +2,7 @@ import pickle
 from collections import namedtuple
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
 from lightning import LightningDataModule
 from loguru import logger
@@ -33,6 +34,7 @@ class PikaDataModule(LightningDataModule):
         min_protein_length: int = 0,
         max_text_length: int = 250,
         data_field_names: str | List[str] = "qa",
+        add_control_question: bool = True,
         sequence_placeholder: str = "<protein sequence placeholder> ",
         train_batch_size: int = 4,
         eval_batch_size: int | None = None,
@@ -50,6 +52,7 @@ class PikaDataModule(LightningDataModule):
         :param min_protein_length: min protein length to use. Useful for debugging GPU OOM
         :param max_text_length: max length of text allowed
         :param data_field_names: name of data fields to use for training (must be present in data_dict)
+        :param add_control_question: whether to add control question as an additional example
         :param sequence_placeholder: string that is put ahead of all text to accumulate sequence embeddings.
                                 will be ignored in loss computation by setting label to -100
         :param train_batch_size: train batch size
@@ -127,6 +130,8 @@ class PikaDataModule(LightningDataModule):
             uid: [v for fn in data_field_names for v in fields[fn]] for uid, fields in data_dict.items()
         }
         metadata.loc[:, "examples"] = metadata["uniprot_id"].apply(lambda x: data_fields[x])
+        if add_control_question:
+            metadata["examples"] = metadata["examples"].map(lambda x: x + ["control_question"])
         self.train_dataset = PikaDataset(metadata, sequences, "train")
         self.val_dataset = PikaDataset(metadata, sequences, "val")
 
@@ -135,6 +140,9 @@ class PikaDataModule(LightningDataModule):
         metrics_df.rename(columns={"index": "uniprot_id"}, inplace=True)
 
         metrics_df = pd.merge(metrics_df, metadata[["uniprot_id", "split"]], on="uniprot_id")
+        if add_control_question:
+            metrics_df["is_real"] = np.random.choice([False, True], size=len(metrics_df))
+            metrics_df["is_fake"] = metrics_df["is_real"].map(lambda x: not x)
         self.val_metric_dataset = PikaLiteDataset(metrics_df, sequences, "val")
 
     def train_dataloader(self) -> DataLoader:  # type: ignore[type-arg]

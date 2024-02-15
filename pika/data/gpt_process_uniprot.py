@@ -8,7 +8,7 @@ from loguru import logger
 from pika.data.gpt_instructions import METRIC_INSTRUCTIONS, SUMMARY_INSTRUCTIONS
 from pika.data.postprocess_gpt_results import postprocess_gpt_results
 from pika.utils.chatgpt_processor import GPTProcessor
-from pika.utils.data_utils import file_path_assertions
+from pika.utils.helpers import file_path_assertions
 
 
 def create_final_dataset_with_gpt(

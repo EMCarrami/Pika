@@ -4,7 +4,7 @@ import os
 import subprocess
 import time
 from ast import literal_eval
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import WandbLogger
@@ -13,8 +13,25 @@ from loguru import logger
 import wandb
 
 
+class ExceptionHandlerCallback(Callback):
+    """Callback to handle exceptions."""
+
+    def on_exception(self, trainer: Trainer, model: LightningModule, exception: BaseException) -> None:
+        """Run final logs."""
+        model.on_train_epoch_end()
+        # to trigger checkpoint upload
+        if isinstance(trainer.logger, WandbLogger):
+            trainer.logger.finalize("success")
+
+
 def gpu_usage_logger(wandb_config: Dict[str, Any], gpu_id: int, log_interval: float = 0.1) -> None:
-    """Log gpu usage every second to wandb."""
+    """
+    Log gpu usage every second to wandb.
+
+    :param wandb_config: Wandb config to use. If supplied with id it will add the log to an existing run.
+    :param gpu_id: id of the gpu to monitor. e.g. 0
+    :param log_interval: log interval in seconds.
+    """
     wandb.init(**wandb_config, resume="allow")
     while True:
         gpu_usage = subprocess.check_output(
@@ -62,38 +79,30 @@ def load_config(path: str) -> Dict[str, Any]:
     return config
 
 
-class ExceptionHandlerCallback(Callback):
-    """Callback to handle exceptions."""
+def file_path_assertions(file_path: str, exists_ok: bool, strict_extension: str | None = None) -> Tuple[str, str]:
+    """
+    Check validity of file_path and create parent dirs.
 
-    def on_exception(self, trainer: Trainer, model: LightningModule, exception: BaseException) -> None:
-        """Run final logs."""
-        model.on_train_epoch_end()
-        # to trigger checkpoint upload
-        if isinstance(trainer.logger, WandbLogger):
-            trainer.logger.finalize("success")
+    :param file_path: file path to analyse/
+    :param exists_ok: If False raises Exception when file exists. If True raises a warning.
+    :param strict_extension: Whether to strictly check for a specific extension.
 
+    :returns file name and file extension
+    """
+    base_name = os.path.basename(file_path)
+    assert base_name, f"file path {file_path} should not point to a directory."
+    assert "." in base_name, f"specify an extension or the file {file_path}"
+    if strict_extension is not None:
+        assert file_path.endswith(
+            strict_extension.strip(".")
+        ), f"file path must be a {strict_extension} file. {file_path} was given."
 
-def get_output_file_path(config: Dict[str, Any]) -> str:
-    """Get output file path and create directories."""
-    if "save_file_path" in config:
-        out_file = config["save_file_path"]
-        if out_file == "auto":
-            save_dir = "test_results"
-            file_name = config["checkpoint"]["path"].split("/")[-1].split(".")[0]
-            if "name" in config["wandb"]:
-                file_name = f"{config['wandb']['name']}_{file_name.split('_')[-1]}"
-            out_file = f"{save_dir}/{file_name}.tsv"
-        else:
-            assert out_file.endswith(".tsv"), "only csv format is supported"
-            if len(out_file.split("/")) > 1:
-                save_dir = "/".join(out_file.split("/")[:-1])
-            else:
-                save_dir = "test_results"
-                out_file = f"{save_dir}/{out_file}"
-        assert not os.path.isfile(out_file), f"{out_file} already exists"
-        os.makedirs(save_dir, exist_ok=True)
-        logger.info(f"predicted texts will be saved in {out_file}")
-        assert isinstance(out_file, str)
-        return out_file
+    if exists_ok:
+        if os.path.isfile(file_path):
+            logger.warning(f"{file_path} already exists. File will be overwritten, ensure this is intended.")
     else:
-        return ""
+        assert not os.path.isfile(file_path), f"file {file_path} already present, provide a new file name."
+
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    fn, ext = os.path.splitext(base_name)
+    return fn, ext

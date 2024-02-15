@@ -1,38 +1,7 @@
-import os
-from typing import Sequence, Tuple
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
-from loguru import logger
-
-
-def file_path_assertions(file_path: str, exists_ok: bool, strict_extension: str | None = None) -> Tuple[str, str]:
-    """
-    Check validity of file_path and create parent dirs.
-
-    :param file_path: file path to analyse/
-    :param exists_ok: If False raises Exception when file exists. If True raises a warning.
-    :param strict_extension: Whether to strictly check for a specific extension.
-
-    :returns file name and file extension
-    """
-    base_name = os.path.basename(file_path)
-    assert base_name, f"file path {file_path} should not point to a directory."
-    assert "." in base_name, f"specify an extension or the file {file_path}"
-    if strict_extension is not None:
-        assert file_path.endswith(
-            strict_extension.strip(".")
-        ), f"file path must be a {strict_extension} file. {file_path} was given."
-
-    if exists_ok:
-        if os.path.isfile(file_path):
-            logger.warning(f"{file_path} already exists. File will be overwritten, ensure this is intended.")
-    else:
-        assert not os.path.isfile(file_path), f"file {file_path} already present, provide a new file name."
-
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    fn, ext = os.path.splitext(base_name)
-    return fn, ext
 
 
 def random_split_df(df: pd.DataFrame, ratios: Sequence[float], key: str = "uniref_id") -> None:

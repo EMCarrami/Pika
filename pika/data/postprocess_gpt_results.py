@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 from loguru import logger
 from tqdm import tqdm
 
-from pika.utils.data_utils import file_path_assertions
+from pika.utils.helpers import file_path_assertions
 
 
 def postprocess_gpt_results(
@@ -75,7 +75,6 @@ def postprocess_gpt_results(
             aggregate_metrics = assign_metrics(metrics)
             assert isinstance(aggregate_metrics["is_enzyme"], bool)
             summary_qa.append(get_enzyme_qa(aggregate_metrics["is_enzyme"]))
-            summary_qa.append(get_is_real_question())
 
             aggregate_metrics["length"] = int(uniref_dict[uid]["protein size"][0].split()[0])
             aggregate_metrics["mw"] = int(uniref_dict[uid]["protein size"][1].split()[0])
@@ -191,15 +190,3 @@ def get_enzyme_qa(is_enzyme: bool) -> str:
         return f"{random.choice(is_enzyme_questions)} Yes"
     else:
         raise ValueError(f"is_enzyme must be 0 or 1. {is_enzyme} was given.")
-
-
-def get_is_real_question() -> str:
-    """Get a random question form on whether the protein is a real protein."""
-    is_real_questions = [
-        "Is this a real protein?",
-        "Does this sequence represent a real protein?",
-        "Is this sequence from an actual protein?",
-        "Does this sequence belong to a true protein?",
-        "Does the given sequence correspond to a genuine protein?",
-    ]
-    return f"{random.choice(is_real_questions)} yes_real"

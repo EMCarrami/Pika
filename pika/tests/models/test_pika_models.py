@@ -7,7 +7,7 @@ from torch import Tensor
 from pika.model.pika_model import PikaModel
 
 
-class TestCprtModel(TestCase):
+class TestCrossPika(TestCase):
     """Test cross attention into LLM."""
 
     model: PikaModel

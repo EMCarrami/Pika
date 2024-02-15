@@ -103,12 +103,14 @@ class TestCrossAttentionDecoderLayer(TestCase):
         )
 
         self.text_emb = torch.rand(2, 50, text_emb_dim)
+        self.attn_mask = torch.ones(2, 1, 1, 50)
         self.protein_emb = torch.rand(2, 8, 10)
 
     def test_output_shape(self) -> None:
         decoder_out = self.decoder(self.text_emb)
         cprt_layer_out = self.layer(
             self.text_emb,
+            attention_mask=self.attn_mask,
             encoder_hidden_states=self.protein_emb,
             encoder_attention_mask=None,
         )
@@ -116,4 +118,6 @@ class TestCrossAttentionDecoderLayer(TestCase):
 
     def test_input_assertion(self) -> None:
         with self.assertRaises(AssertionError):
-            self.layer(self.text_emb, encoder_hidden_states=None, encoder_attention_mask=None)
+            self.layer(
+                self.text_emb, attention_mask=self.attn_mask, encoder_hidden_states=None, encoder_attention_mask=None
+            )

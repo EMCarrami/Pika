@@ -1,6 +1,7 @@
 import os
 import pickle
 import unittest
+from time import sleep
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
@@ -55,6 +56,7 @@ class TestGPTProcessor(unittest.TestCase):
             """Raise exception for req2."""
             if "req2" in request_id:
                 raise Exception("Test exception")
+            sleep(1)
             return {"text": f"Response for {request_id}"}
 
         mock_get_response.side_effect = side_effect

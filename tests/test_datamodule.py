@@ -5,6 +5,7 @@ from typing import Any, List, NamedTuple, Type
 from torch import Tensor
 
 from pika.datamodule.pika_datamodule import PikaData, PikaDataModule, PikaMetricData
+from pika.utils.model_utils import CONTROL_QUESTIONS
 
 
 class TestPikaDataModule(unittest.TestCase):
@@ -39,6 +40,12 @@ class TestPikaDataModule(unittest.TestCase):
         # check batch is of current type and has the right attributes and size
         self.assertIsInstance(batch, PikaData)
         self._check_batch(batch, ["protein", "info", "info_mask", "labels"], [Tensor, Tensor, Tensor, Tensor])
+        # test labels have eos token
+        self.assertEqual(
+            batch.labels.eq(self.datamodule.text_tokenizer.eos_token_id).sum().item(),
+            self.batch_size,
+            "labels dont seem to have exactly one eos token.",
+        )
 
     def test_val_dataloader(self) -> None:
         val_loaders = self.datamodule.val_dataloader()
@@ -88,12 +95,12 @@ class TestPikaDataModule(unittest.TestCase):
             else:
                 self.assertIsInstance(getattr(batch, i)[0], t)
 
-    def test_control_question(self) -> None:
+    def test_control_question_added(self) -> None:
         """Test if control_question is added correctly to metadata for datasets."""
         # check correct fields when control question needed
-        train_df = self.datamodule.train_dataloader().dataset.split_df  # type: ignore[attr-defined]
-        val0_df = self.datamodule.val_dataloader()[0].dataset.split_df  # type: ignore[attr-defined]
-        val1_df = self.datamodule.val_dataloader()[1].dataset.split_df  # type: ignore[attr-defined]
+        train_df = self.datamodule.train_dataset.split_df
+        val0_df = self.datamodule.val_dataset.split_df
+        val1_df = self.datamodule.val_metric_dataset.split_df
         self.assertIn("control_question", train_df["examples"].to_list())
         self.assertIn("control_question", val0_df["examples"].to_list())
         self.assertIn("is_real", val1_df["metric"].to_list())
@@ -108,9 +115,22 @@ class TestPikaDataModule(unittest.TestCase):
             eval_batch_size=self.batch_size,
             add_control_question=False,
         )
-        train_df = neg_dm.train_dataloader().dataset.split_df  # type: ignore[attr-defined]
-        val0_df = neg_dm.val_dataloader()[0].dataset.split_df  # type: ignore[attr-defined]
-        val1_df = neg_dm.val_dataloader()[1].dataset.split_df  # type: ignore[attr-defined]
+        train_df = neg_dm.train_dataset.split_df
+        val0_df = self.datamodule.val_dataset.split_df
+        val1_df = self.datamodule.val_metric_dataset.split_df
         self.assertNotIn("control_question", train_df["examples"].to_list())
         self.assertNotIn("control_question", val0_df["examples"].to_list())
         self.assertNotIn("is_real", val1_df["metric"].to_list())
+
+    def test_control_question_encoded(self) -> None:
+        """Test if control_question is correctly created and used."""
+        # check correct fields when control question needed
+        original_df = self.datamodule.train_dataset.split_df
+        # only keep control questions and reassign in datamodule
+        original_df = original_df[original_df.examples == "control_question"]
+        self.datamodule.train_dataset.split_df = original_df
+        train_loader = self.datamodule.train_dataloader()
+        batch = next(iter(train_loader))
+        questions = self.datamodule.text_tokenizer.batch_decode(batch.info)
+        for q in questions:
+            self.assertTrue(any([i in q for i in CONTROL_QUESTIONS]), f"control question not found in {q}")

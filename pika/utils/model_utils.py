@@ -1,6 +1,14 @@
 import random
 from typing import Literal
 
+CONTROL_QUESTIONS = [
+    "Is this a real protein?",
+    "Does this sequence represent a real protein?",
+    "Is this sequence from an actual protein?",
+    "Does this sequence belong to a true protein?",
+    "Does the given sequence correspond to a genuine protein?",
+]
+
 
 def shuffle_protein(seq: str, constant_ends: int = 5) -> str:
     """Shuffle the protein sequence except for the first and last constant_ends aa."""
@@ -11,11 +19,4 @@ def shuffle_protein(seq: str, constant_ends: int = 5) -> str:
 
 def get_is_real_question(response: Literal["Yes", "No"]) -> str:
     """Get a random question form on whether the protein is a real protein, with a specified response."""
-    is_real_questions = [
-        "Is this a real protein?",
-        "Does this sequence represent a real protein?",
-        "Is this sequence from an actual protein?",
-        "Does this sequence belong to a true protein?",
-        "Does the given sequence correspond to a genuine protein?",
-    ]
-    return f"{random.choice(is_real_questions)} {response}"
+    return f"{random.choice(CONTROL_QUESTIONS)} {response}"

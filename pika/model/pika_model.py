@@ -3,7 +3,6 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, cast
 
 import torch
-import wandb
 from lightning import LightningModule
 from lightning.pytorch.loggers import WandbLogger
 from lightning_utilities.core.rank_zero import rank_zero_only
@@ -14,6 +13,7 @@ from torchmetrics.text import Perplexity, ROUGEScore
 from transformers import AutoTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
+import wandb
 from pika.datamodule.pika_datamodule import PikaData, PikaMetricData
 from pika.metrics.biochem_lite_metrics import BiochemLiteMetrics
 from pika.model.helper_modules import TruncatedESM2
@@ -107,7 +107,7 @@ class PikaModel(LightningModule):
 
         for param in self.pika_llm.parameters():
             param.requires_grad = False
-
+        self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         protein_emb_dim = self.esm.embedding_dim
         protein_num_heads = self.esm.num_heads
         text_emb_dim = self.pika_llm.config.n_embd

@@ -1,0 +1,32 @@
+{
+  "seed": 7,
+  "datamodule": {
+    "data_dict_path": "sample_data.pkl",
+    "split_path": "sample_split.csv",
+    "max_protein_length": 1500,
+    "max_text_length": 250,
+    "data_field_names": "qa",
+    "sequence_placeholder": "<protein sequence placeholder> ",
+    "train_batch_size": 2,
+    "eval_batch_size": 2,
+    "num_workers": 0
+  },
+  "model": {
+    "language_model": "gpt2",
+    "protein_model": "esm2_t6_8M_UR50D",
+    "multimodal_strategy": "cross-pika",
+    "protein_layer_to_use": -1,
+    "perceiver_latent_size": 10,
+    "num_perceiver_layers": 1,
+    "multimodal_layers": "all",
+    "enable_gradient_checkpointing": false,
+    "lr": 1e-4,
+    "weight_decay": 1e-4
+  },
+  "trainer": {
+    "max_epochs": 1,
+    "limit_train_batches": 1,
+    "limit_val_batches": 1,
+    "limit_test_batches": 1
+  }
+}

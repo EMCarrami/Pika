@@ -5,12 +5,12 @@ from typing import Any, Dict, List, Literal
 
 import pandas as pd
 import torch
-import wandb
 from lightning import Callback, Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from loguru import logger
 
+import wandb
 from pika.datamodule.pika_datamodule import PikaDataModule
 from pika.model.pika_model import PikaModel
 from pika.utils.checkpoint_utils import PartialCheckpointConnector, load_from_checkpoint
@@ -54,6 +54,8 @@ class Pika:
             self.datamodule = PikaDataModule(**config["datamodule"])
 
             callbacks: List[Callback] = []
+            if "checkpoint_callback" not in config:
+                config["checkpoint_callback"] = {}
             time_stamp = datetime.now().strftime("%y%m%d%H%M%S")
             checkpoint_path = config["checkpoint_callback"].get("checkpoint_path", "model_checkpoints")
             partial_checkpoint = config["checkpoint_callback"].get("save_partial_checkpoints", True)

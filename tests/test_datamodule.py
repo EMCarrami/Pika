@@ -134,3 +134,20 @@ class TestPikaDataModule(unittest.TestCase):
         questions = self.datamodule.text_tokenizer.batch_decode(batch.info)
         for q in questions:
             self.assertTrue(any([i in q for i in CONTROL_QUESTIONS]), f"control question not found in {q}")
+
+    def test_multi_field(self) -> None:
+        """Test multi-field datamodule."""
+        multi_dm = PikaDataModule(
+            data_dict_path=self.sample_data_path,
+            split_path=self.sample_split_path,
+            language_model="gpt2",
+            protein_model="esm2_t6_8M_UR50D",
+            max_protein_length=1500,
+            train_batch_size=self.batch_size,
+            eval_batch_size=self.batch_size,
+            data_field_names=["qa", "summary"],
+            add_control_question=False,
+        )
+        train_df = multi_dm.train_dataset.split_df
+        # ensure both questions (with ?) and summary sentences (without ?) are present in examples
+        self.assertEqual(set(train_df["examples"].map(lambda x: "?" in x).unique()), {False, True})

@@ -122,7 +122,6 @@ class PikaReActDataset(Dataset[Tuple[str, str, str, str]]):
                             - uniprot_id
                             - subjects: name of the subject
                             - ground_truth: true answer to the subject of test
-                            - split: name of the split the uniprot_id belongs
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param subject: test subject
         """

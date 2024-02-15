@@ -116,8 +116,8 @@ class TestPikaDataModule(unittest.TestCase):
             add_control_question=False,
         )
         train_df = neg_dm.train_dataset.split_df
-        val0_df = self.datamodule.val_dataset.split_df
-        val1_df = self.datamodule.val_metric_dataset.split_df
+        val0_df = neg_dm.val_dataset.split_df
+        val1_df = neg_dm.val_metric_dataset.split_df
         self.assertNotIn("control_question", train_df["examples"].to_list())
         self.assertNotIn("control_question", val0_df["examples"].to_list())
         self.assertNotIn("is_real", val1_df["metric"].to_list())

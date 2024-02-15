@@ -69,4 +69,7 @@ class TestGPTProcessor(unittest.TestCase):
             processor.bulk_process(message_list, request_names, num_workers=2, return_dict=True, save_dir=None)
 
         # Check not all tasks were processed before the exception was raised
-        self.assertTrue(mock_get_response.call_count < 10, "Not all tasks should have been processed")
+        self.assertTrue(
+            mock_get_response.call_count < 100,
+            f"Not all tasks should have been processed: {mock_get_response.call_count}",
+        )

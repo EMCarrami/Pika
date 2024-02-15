@@ -17,22 +17,22 @@ repos:
     rev: 4.0.1
     hooks:
     - id: flake8
-      exclude: cprt/model/original_phi
+      exclude: pika/model/original_phi
       files: \.py$
       additional_dependencies: ['flake8-docstrings==1.6.0']
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.5.1
+    rev: v1.8.0
     hooks:
     - id: mypy
-      exclude: cprt/model/original_phi
       args: [
-        --strict,
         --install-types,
         --non-interactive,
         --incremental
       ]
-      additional_dependencies: ['torch==2.0.0', 'pytorch-lightning==2.0.0', 'numpy', 'wandb']
+      additional_dependencies: [
+        'torch==2.1.0', 'lightning==2.1.0', 'pytorch-lightning==2.1.0', 'lightning-utilities==0.9.0', 'numpy', 'wandb'
+      ]
       files: \.py$
 
 -   repo: https://github.com/pycqa/isort

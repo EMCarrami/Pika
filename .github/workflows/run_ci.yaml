@@ -40,7 +40,7 @@ jobs:
 
     - name: Type check with mypy
       run: |
-        mypy pika/ --install-types --non-interactive --show-traceback
+        mypy . --install-types --non-interactive --show-traceback
 
     - name: Run tests
       run: |

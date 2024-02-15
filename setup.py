@@ -28,7 +28,7 @@ print(f"install_requires: {install_requires}")
 print(f"dev_requires: {dev_requires}")
 
 setup(
-    name="pika_llm",
+    name="pika",
     version="0.1.0",
     author="EMCarrami",
     author_email="eli.carrami@gmail.com",

@@ -111,7 +111,8 @@ class PikaDataModule(LightningDataModule):
         self.test_df = None
         if self.test_subjects is not None:
             allowed = ["catalytic activity", "reaction", "cofactor", "domains", "functional domains", "taxonomy"]
-            self.test_subjects = allowed if self.test_subjects == "all" else self.test_subjects
+            if isinstance(self.test_subjects, str):
+                self.test_subjects = allowed if self.test_subjects == "all" else [self.test_subjects]
             assert all([i in allowed for i in self.test_subjects]), f"only {allowed} test_subjects are supported."
             map_subjects = {"reaction": "catalytic activity", "domains": "functional domains"}
             self.test_subjects = list(set([map_subjects.get(i, i) for i in self.test_subjects]))

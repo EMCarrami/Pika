@@ -31,7 +31,7 @@ class PikaDataModule(LightningDataModule):
         protein_model: str,
         language_model: str,
         max_protein_length: int,
-        min_protein_length: int = 0,
+        min_protein_length: int = 30,
         max_text_length: int = 250,
         data_field_names: str | List[str] = "qa",
         add_control_question: bool = True,
@@ -49,7 +49,7 @@ class PikaDataModule(LightningDataModule):
         :param protein_model: esm model to use for tokenizer
         :param language_model: language model to use for tokenizer
         :param max_protein_length: max length of protein allowed
-        :param min_protein_length: min protein length to use. Useful for debugging GPU OOM
+        :param min_protein_length: min protein length to use.
         :param max_text_length: max length of text allowed
         :param data_field_names: name of data fields to use for training (must be present in data_dict)
         :param add_control_question: whether to add control question as an additional example
@@ -75,7 +75,7 @@ class PikaDataModule(LightningDataModule):
         self.test_subjects = test_subjects
 
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{protein_model}")
-        self.protein_tokenizer.model_max_length = max_protein_length
+        self.protein_tokenizer.model_max_length = max_protein_length + 2
         self.text_tokenizer = AutoTokenizer.from_pretrained(language_model, revision=rev)
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         self.max_text_length = max_text_length
@@ -103,8 +103,8 @@ class PikaDataModule(LightningDataModule):
         )
         metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
         metadata.loc[:, "uniref_id"] = metadata["uniprot_id"].apply(lambda x: data_dict[x]["uniref_id"])
-        metadata = metadata[metadata["protein_length"] < max_protein_length]
-        metadata = metadata[metadata["protein_length"] > min_protein_length]
+        metadata = metadata[metadata["protein_length"] <= max_protein_length]
+        metadata = metadata[metadata["protein_length"] >= min_protein_length]
         metadata.reset_index(drop=True, inplace=True)
 
         # prepare test sets if needed

@@ -66,7 +66,7 @@ def cli_parser() -> Dict[str, Any]:
             _config = _config[_k]
         try:
             _config[end_key] = literal_eval(v)
-        except ValueError:
+        except (ValueError, SyntaxError):
             _config[end_key] = v
     return config
 

@@ -3,10 +3,10 @@
 <table width="100%" border="0" cellspacing="0" cellpadding="0">
   <tr>
     <td style="font-size: 18px; width: 80%; padding-top: 0; padding-bottom: 0;">
-      Pika enables scientific question answering about protein sequences.                       
+      Pika enables scientific question answering about protein sequences.
       <br>
       <br>
-      <a href="https://arxiv.org/abs/5421595">Zero-shot Protein Question Answering pre-print</a>
+      <a href="https://arxiv.org/abs/5421595">Zero-shot Protein Question Answering for Free-form Scientific Enquiry pre-print</a>
     </td>
     <td style="padding-top: 0; padding-bottom: 0;"><img src="assets/Pika_logo.png" title="Pika Framework" height="120" style="float: right;"></td>
   </tr>

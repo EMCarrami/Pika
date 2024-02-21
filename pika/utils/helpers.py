@@ -57,21 +57,24 @@ def cli_parser() -> Tuple[Dict[str, Any], str]:
         config_path: str = args_dict.pop("config")
         config = load_config(config_path)
     except (KeyError, FileNotFoundError):
-        raise ValueError("--config must be specified and direct to a valid config file.")
+        raise AssertionError("--config must be specified and direct to a valid config file.")
 
     run_modes = ["train", "train_and_benchmark", "benchmark_only", "infer_only", "enquire", "train_classifier"]
     try:
         run_mode: str = args_dict.pop("run_mode")
         assert run_mode in run_modes
     except (KeyError, AssertionError):
-        raise ValueError(f"--run_mode must be specified and be one of {run_modes}.")
+        raise AssertionError(f"--run_mode must be specified and be one of {run_modes}. {args_dict} was given")
 
     for k, v in args_dict.items():
         keys = k.split(".")
         end_key = keys.pop()
         _config = config
         for _k in keys:
-            _config = _config[_k]
+            try:
+                _config = _config[_k]
+            except KeyError as key_error:
+                raise KeyError(f"all parsed keys and nested keys must be present in the base config.\n{key_error}")
         try:
             _config[end_key] = literal_eval(v)
         except (ValueError, SyntaxError):

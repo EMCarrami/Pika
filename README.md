@@ -1,9 +1,9 @@
 # Pika
 
-<table width="10%" border="0" cellspacing="0" cellpadding="0">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
   <tr>
-    <td style="font-size: 20px; width: 80%; padding-top: 0; padding-bottom: 0;">
-      Pika enables scientific question answering about protein sequences.
+    <td style="font-size: 18px; width: 80%; padding-top: 0; padding-bottom: 0;">
+      Pika enables scientific question answering about protein sequences.                       
       <br>
       <br>
       <a href="https://arxiv.org/abs/5421595">Zero-shot Protein Question Answering pre-print</a>

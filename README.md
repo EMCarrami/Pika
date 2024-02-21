@@ -1,17 +1,18 @@
-<table width="100%">
+# Pika
+
+<table width="10%" border="0" cellspacing="0" cellpadding="0">
   <tr>
-    <td style="font-size: 36px; font-weight: bold; width: 85%;">
-      Pika
+    <td style="font-size: 16px; width: 85%; padding-top: 0; padding-bottom: 0;">
+      Pika enables scientific question answering about protein sequences.
       <br>
-      <!-- Smaller font size for the description -->
-      <span style="font-size: 14px; font-weight: normal; display: block;">Pika enables scientific question answering about protein sequences.</span>
+      <br>
+      <a href="https://arxiv.org/abs/XXXXXX">PQA: Zero-shot Protein Question Answering for Free-form Scientific Enquiry with Large Language Models</a>
     </td>
-    <td><img src="assets/Pika_logo.png" title="Pika Framework" height="150" align="right"></td>
+    <td style="padding-top: 0; padding-bottom: 0;"><img src="assets/Pika_logo.png" title="Pika Framework" height="150" style="float: right;"></td>
   </tr>
 </table>
 
 
-Preprint: [PQA: Zero-shot Protein Question Answering for Free-form Scientific Enquiry with Large Language Models](https://arxiv.org/submit/5421595/view)
 <p align="left"><img src="assets/Pika.png" title="Pika Framework" height="500"></p>
 
 ## Installation from source

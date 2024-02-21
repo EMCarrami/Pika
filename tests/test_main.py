@@ -16,7 +16,7 @@ class TestPika(unittest.TestCase):
 
     def _run_training(self, config_path: str) -> Pika:
         """Run training and return Pika object."""
-        assets_path = os.path.join(os.path.dirname(__file__), "assets")
+        assets_path = os.path.join(os.path.dirname(__file__), "../assets")
         self_config = load_config(os.path.join(assets_path, config_path))
         self_config["datamodule"]["data_dict_path"] = os.path.join(
             assets_path, self_config["datamodule"]["data_dict_path"]

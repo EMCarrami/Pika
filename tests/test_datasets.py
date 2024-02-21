@@ -22,7 +22,7 @@ class TestPikaDatasets(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         super(TestPikaDatasets, cls).setUpClass()
-        assets_path = os.path.join(os.path.dirname(__file__), "assets")
+        assets_path = os.path.join(os.path.dirname(__file__), "../assets")
         sample_data_path = os.path.join(assets_path, "sample_data.pkl")
 
         with open(sample_data_path, "rb") as f:

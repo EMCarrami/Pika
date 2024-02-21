@@ -19,7 +19,7 @@ class TestPikaDataModule(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         super(TestPikaDataModule, cls).setUpClass()
-        assets_path = os.path.join(os.path.dirname(__file__), "assets")
+        assets_path = os.path.join(os.path.dirname(__file__), "../assets")
         cls.sample_data_path = os.path.join(assets_path, "sample_data.pkl")
         cls.sample_split_path = os.path.join(assets_path, "sample_split.csv")
         cls.batch_size = 2

@@ -1,14 +1,14 @@
 from typing import Any, Dict
 
-import wandb
 from lightning import Trainer, seed_everything
 from lightning.pytorch.loggers import WandbLogger
 
+import wandb
 from pika.baselines.classification_datamodule import ClassificationDataModule
 from pika.baselines.classification_model import ProteinClassificationModel
 
 
-def train_classifier(config: Dict[str, Any], log_to_wandb: bool = False) -> None:
+def train_classifier(config: Dict[str, Any]) -> None:
     """Run protein classifier training."""
     if "seed" in config:
         seed_everything(config["seed"])
@@ -23,7 +23,7 @@ def train_classifier(config: Dict[str, Any], log_to_wandb: bool = False) -> None
         f"{config['datamodule']['classification_task']}"
     )
 
-    if log_to_wandb:
+    if "wandb" in config:
         config["wandb"]["group"] = group_name
         wandb_logger = WandbLogger(**config["wandb"])
         trainer = Trainer(logger=wandb_logger, **config["trainer"])

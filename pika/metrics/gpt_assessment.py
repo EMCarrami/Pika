@@ -6,9 +6,9 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-import wandb
 from loguru import logger
 
+import wandb
 from pika.utils.chatgpt_processor import GPTProcessor
 
 FIRST = "Please take a deep breath and with care and attention to details answer the following question.\n"
@@ -38,7 +38,7 @@ def get_gpt_metrics(
     table_path: str,
     wandb_project: str | None = "",
     wandb_run_id: str | None = None,
-    subsample: float | int = 1.0,
+    subsample: float | int | List[str] = 1.0,
     subjects: List[str] | None = None,
     save_dir: str = "results",
 ) -> None:
@@ -47,14 +47,19 @@ def get_gpt_metrics(
         if wandb_run_id is not None:
             wandb.init(project=wandb_project, id=wandb_run_id, resume="must")
         else:
-            wandb.init(project=wandb_project)
+            wandb.init(project=wandb_project, name="closest_score_le_36_easy-paper-43")
     file_name = table_path.split("/")[-1]
     results_path = f'{save_dir}/{file_name.replace(".ckpt", ".tsv")}'
     os.makedirs(save_dir, exist_ok=True)
     assert not os.path.isfile(results_path)
     np.random.seed(0)
     df = pd.read_csv(table_path, delimiter="\t")
-    if subsample != 1:
+    if isinstance(subsample, list):
+        df = df[df["uniprot_id"].isin(subsample)]
+        assert len(df["uniprot_id"].unique()) == len(
+            subsample
+        ), f"some of the {subsample} were found in {df['uniprot_id'].unique()}"
+    elif subsample != 1:
         if isinstance(subsample, float):
             assert subsample < 1
             df = df.sample(frac=subsample)

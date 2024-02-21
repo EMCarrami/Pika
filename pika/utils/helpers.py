@@ -41,7 +41,7 @@ def gpu_usage_logger(wandb_config: Dict[str, Any], gpu_id: int, log_interval: fl
         time.sleep(log_interval)
 
 
-def cli_parser() -> Dict[str, Any]:
+def cli_parser() -> Tuple[Dict[str, Any], str]:
     """Parse config file and update args."""
     parser = argparse.ArgumentParser()
     _, args = parser.parse_known_args()
@@ -58,6 +58,14 @@ def cli_parser() -> Dict[str, Any]:
         config = load_config(config_path)
     except (KeyError, FileNotFoundError):
         raise ValueError("--config must be specified and direct to a valid config file.")
+
+    run_modes = ["train", "train_and_benchmark", "benchmark_only", "infer_only", "enquire", "train_classifier"]
+    try:
+        run_mode: str = args_dict.pop("run_mode")
+        assert run_mode in run_modes
+    except (KeyError, AssertionError):
+        raise ValueError(f"--run_mode must be specified and be one of {run_modes}.")
+
     for k, v in args_dict.items():
         keys = k.split(".")
         end_key = keys.pop()
@@ -68,7 +76,7 @@ def cli_parser() -> Dict[str, Any]:
             _config[end_key] = literal_eval(v)
         except (ValueError, SyntaxError):
             _config[end_key] = v
-    return config
+    return config, run_mode
 
 
 def load_config(path: str) -> Dict[str, Any]:

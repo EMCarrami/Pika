@@ -33,7 +33,7 @@ class Pika:
         if "seed" in config:
             seed_everything(config["seed"])
 
-        if "checkpoint" in config["model"]:
+        if config["model"].get("checkpoint", None) is not None:
             self.model = load_from_checkpoint(config["model"]["checkpoint"])
             config["model"].update(dict(self.model.hparams))
             self.model_state = "pretrained"

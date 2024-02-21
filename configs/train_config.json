@@ -1,14 +1,16 @@
 {
-  "seed": 7,
+  "seed": 1,
   "datamodule": {
-    "data_dict_path": "dataset/uniref50_gpt_data.pkl",
-    "split_path": "dataset/split_0.csv",
+    "data_dict_path": "dataset/pika_data.pkl",
+      "split_path": "dataset/pika_split_1.csv",
     "max_protein_length": 1500,
     "max_text_length": 250,
     "data_field_names": "qa",
+    "add_control_question": true,
     "sequence_placeholder": "<protein sequence placeholder> ",
     "train_batch_size": 8,
     "eval_batch_size": 32,
+    "test_subjects": "all",
     "num_workers": 4
   },
   "model": {
@@ -21,10 +23,12 @@
     "multimodal_layers": [0],
     "enable_gradient_checkpointing": false,
     "lr": 1e-4,
-    "weight_decay": 1e-4
+    "weight_decay": 1e-4,
+    "schedulers": null,
+    "checkpoint": null
   },
   "wandb": {
-    "project": "Paper-Exp-0",
+    "project": "project_name",
     "log_model": "all"
   },
   "checkpoint_callback": {

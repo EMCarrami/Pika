@@ -2,7 +2,7 @@
 
 <table width="10%" border="0" cellspacing="0" cellpadding="0">
   <tr>
-    <td style="font-size: 16px; width: 85%; padding-top: 0; padding-bottom: 0;">
+    <td style="font-size: 16px; width: 82%; padding-top: 0; padding-bottom: 0;">
       Pika enables scientific question answering about protein sequences.
       <br>
       <br>

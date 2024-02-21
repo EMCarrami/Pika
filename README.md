@@ -8,7 +8,7 @@
       <br>
       <a href="https://arxiv.org/abs/XXXXXX">PQA: Zero-shot Protein Question Answering for Free-form Scientific Enquiry with Large Language Models</a>
     </td>
-    <td style="padding-top: 0; padding-bottom: 0;"><img src="assets/Pika_logo.png" title="Pika Framework" height="150" style="float: right;"></td>
+    <td style="padding-top: 0; padding-bottom: 0;"><img src="assets/Pika_logo.png" title="Pika Framework" height="100" style="float: right;"></td>
   </tr>
 </table>
 

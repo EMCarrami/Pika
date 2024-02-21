@@ -1,8 +1,8 @@
 {
   "seed": 0,
   "datamodule": {
-    "data_dict_path": "uniref50_gpt_data.pkl",
-    "split_ratios": [0.945, 0.005, 0.05],
+    "data_dict_path": "dataset/pika_data.pkl",
+    "split_path": "dataset/pika_split_1.csv",
     "classification_task": "is_enzyme",
     "max_protein_length": 1500,
     "train_batch_size": 32,
@@ -17,7 +17,7 @@
     "weight_decay": 1e-4
   },
   "wandb": {
-    "project": "Cprt-Paper-Classification"
+    "project": "project_name"
   },
   "trainer": {
     "val_check_interval": 0.1,

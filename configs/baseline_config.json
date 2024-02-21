@@ -1,8 +1,8 @@
 {
   "seed": 42,
   "datamodule": {
-    "data_dict_path": "uniref50_gpt_data.pkl",
-    "split_ratios": [0.945, 0.005, 0.05],
+    "data_dict_path": "dataset/pika_data.pkl",
+    "split_path": "dataset/pika_split_1.csv",
     "max_protein_length": 1500,
     "max_text_length": 250,
     "data_field_names": "qa",
@@ -18,6 +18,6 @@
     "multimodal_strategy": "llm_only_baseline"
   },
   "wandb": {
-    "project": "Cprt-Paper-Classification"
+    "project": "project_name"
   }
 }

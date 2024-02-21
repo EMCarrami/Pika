@@ -2,7 +2,7 @@
   "seed": 1,
   "datamodule": {
     "data_dict_path": "dataset/pika_data.pkl",
-      "split_path": "dataset/pika_split_1.csv",
+    "split_path": "dataset/pika_split_1.csv",
     "max_protein_length": 1500,
     "max_text_length": 250,
     "data_field_names": "qa",

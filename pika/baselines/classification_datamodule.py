@@ -9,7 +9,6 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
 
-from pika.utils.data_utils import random_split_df
 from pika.utils.model_utils import shuffle_protein
 
 ClassificationData = namedtuple("ClassificationData", ["protein_ids", "labels"])
@@ -21,7 +20,7 @@ class ClassificationDataModule(LightningDataModule):
     def __init__(
         self,
         data_dict_path: str,
-        split_ratios: Tuple[float, float, float],
+        split_path: str,
         classification_task: str,
         protein_model: str,
         max_protein_length: int,
@@ -34,7 +33,7 @@ class ClassificationDataModule(LightningDataModule):
         Load tokenizers and instantiate datasets.
 
         :param data_dict_path: path to dict of uniprot_ids mapped to all info fields and the sequence
-        :param split_ratios: ratio of train, val and test sets
+        :param split_path: path to csv with mapping of uniprot_id to split: [train, val, test]
         :param classification_task: can be one of is_enzyme, is_real, localization, kingdom, mw
         :param protein_model: esm model to use for tokenizer
         :param max_protein_length: max length of protein allowed
@@ -60,16 +59,22 @@ class ClassificationDataModule(LightningDataModule):
 
         with open(data_dict_path, "rb") as f:
             data_dict: Dict[str, Any] = pickle.load(f)
-        metadata = pd.DataFrame(data_dict.keys(), columns=["uniprot_id"])
-
         sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
 
+        # set up splits
+        metadata = pd.read_csv(split_path)
+        assert (
+            "uniprot_id" in metadata.columns and "split" in metadata.columns
+        ), "split_path must be a csv file with column headers providing uniprot_id and split"
+        assert all([i in data_dict for i in metadata["uniprot_id"]]), (
+            f"all uniprot_id of {split_path} must be present in {data_dict_path}. "
+            f"missing keys: {set(metadata['uniprot_id'].to_list()) - set(data_dict.keys())}"
+        )
         metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
         metadata.loc[:, "uniref_id"] = metadata["uniprot_id"].apply(lambda x: data_dict[x]["uniref_id"])
-        metadata = metadata[metadata["protein_length"] < max_protein_length]
-        metadata = metadata[metadata["protein_length"] > min_protein_length]
+        metadata = metadata[metadata["protein_length"] <= max_protein_length]
+        metadata = metadata[metadata["protein_length"] >= min_protein_length]
         metadata.reset_index(drop=True, inplace=True)
-        random_split_df(metadata, split_ratios, key="uniref_id")
 
         metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")
         metrics_df.reset_index(inplace=True)

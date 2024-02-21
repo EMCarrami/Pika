@@ -2,11 +2,11 @@
 
 <table width="10%" border="0" cellspacing="0" cellpadding="0">
   <tr>
-    <td style="font-size: 18px; width: 82%; padding-top: 0; padding-bottom: 0;">
+    <td style="font-size: 18px; width: 75%; padding-top: 0; padding-bottom: 0;">
       Pika enables scientific question answering about protein sequences.
       <br>
       <br>
-      <a href="https://arxiv.org/abs/XXXXXX">PQA: Zero-shot Protein Question Answering for Free-form Scientific Enquiry with Large Language Models</a>
+      <a href="https://arxiv.org/abs/5421595">PQA: Zero-shot Protein Question Answering for Free-form Scientific Enquiry with Large Language Models</a>
     </td>
     <td style="padding-top: 0; padding-bottom: 0;"><img src="assets/Pika_logo.png" title="Pika Framework" height="100" style="float: right;"></td>
   </tr>

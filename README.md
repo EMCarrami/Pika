@@ -9,7 +9,7 @@ In our [pre-print](https://arxiv.org/abs/2402.13653) we introduce the novel task
 ## Installation from source
 
 ```bash
-pip install pip install git+https://github.com/EMCarrami/Pika.git
+pip install git+https://github.com/EMCarrami/Pika.git
 ```
 
 From source

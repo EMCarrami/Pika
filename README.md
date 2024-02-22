@@ -1,17 +1,8 @@
-# Pika
+<h1 id="pika">Pika <img src="assets/Pika_logo.png" alt="Pika Framework" height="50" align="top"></h1>
 
-<table width="100%" border="0" cellspacing="0" cellpadding="0">
-  <tr>
-    <td style="font-size: 18px; width: 80%; padding-top: 0; padding-bottom: 0;">
-      Pika enables scientific question answering about protein sequences.
-      <br>
-      <br>
-      <a href="https://arxiv.org/abs/5421595">Zero-shot Protein Question Answering for Free-form Scientific Enquiry pre-print</a>
-    </td>
-    <td style="padding-top: 0; padding-bottom: 0;"><img src="assets/Pika_logo.png" title="Pika Framework" height="120" style="float: right;"></td>
-  </tr>
-</table>
+Pika enables scientific question answering about protein sequences.
 
+In our [pre-print](https://arxiv.org/abs/2402.13653) we introduce the novel task of zero-shot Protein Question Answering (PQA) for free-form scientific enquiry. Given a previously unseen protein sequence and a natural language question, the task is to deliver a scientifically accurate answer. This task not only supports future biological research, but could also provide a test bed for assessing the scientific precision of large language models (LLMs). We contribute the first specialized dataset for PQA model training, containing 257K protein sequences annotated with 1.97M scientific question-answer pairs. Additionally, we propose and study several novel biologically relevant benchmarks for scientific PQA. Employing two robust multi-modal architectures, we establish an initial state-of-the-art performance for PQA and reveal key performance factors through ablation studies. Our comprehensive PQA framework, named Pika, including dataset, code, model checkpoints, and a user-friendly demo, is openly accessible, promoting wider research and application in the field.
 
 <p align="left"><img src="assets/Pika.png" title="Pika Framework" height="500"></p>
 
@@ -63,3 +54,11 @@ model = Pika(config)
 model.train()
 model.biochem_react_benchmark(model_to_use="best")
 ```
+
+## Interactive Demo
+
+Coming soon ...
+
+## Dataset & Model Checkpoints
+
+Both will be made available upon official publication of the work

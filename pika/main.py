@@ -38,6 +38,7 @@ class Pika:
             config["model"].update(dict(self.model.hparams))
             self.model_state = "pretrained"
         else:
+            config["model"].pop("checkpoint", None)
             self.model = PikaModel(**config["model"])
             self.model_state = "init"
 

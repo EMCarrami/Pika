@@ -55,10 +55,8 @@ model.train()
 model.biochem_react_benchmark(model_to_use="best")
 ```
 
-## Interactive Demo
-
-Coming soon ...
-
 ## Dataset & Model Checkpoints
+
+Complete Pika-DS is available on [HuggingFace](https://huggingface.co/datasets/EMCarrami/Pika-DS)
 
 Both will be made available upon official publication of the work

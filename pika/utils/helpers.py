@@ -114,6 +114,8 @@ def file_path_assertions(file_path: str, exists_ok: bool, strict_extension: str 
     else:
         assert not os.path.isfile(file_path), f"file {file_path} already present, provide a new file name."
 
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    dir_path = os.path.dirname(file_path)
+    if dir_path != "":
+        os.makedirs(dir_path, exist_ok=True)
     fn, ext = os.path.splitext(base_name)
     return fn, ext

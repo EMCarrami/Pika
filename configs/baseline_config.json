@@ -1,11 +1,13 @@
 {
   "seed": 42,
   "datamodule": {
-    "data_dict_path": "dataset/pika_data.pkl",
-    "split_path": "dataset/pika_split_1.csv",
+    "sequence_data_path": "dataset/pika_sequences.csv",
+    "annotations_path": "dataset/pika_annotations.csv",
+    "metrics_data_path": "dataset/pika_metrics.csv",
+    "split_path": "dataset/pika_uniref_split.csv",
     "max_protein_length": 1500,
     "max_text_length": 250,
-    "data_field_names": "qa",
+    "data_types_to_use": "qa",
     "sequence_placeholder": "<protein sequence placeholder> ",
     "subsample_data": 1.0,
     "train_batch_size": 8,

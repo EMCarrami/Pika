@@ -11,24 +11,21 @@ from pika.utils.model_utils import get_is_real_question, shuffle_protein
 class PikaDataset(Dataset[Tuple[str, str]]):
     """Pika torch dataset for training."""
 
-    def __init__(
-        self, metadata: pd.DataFrame, sequences: Dict[str, str], split: Literal["train", "val", "test"]
-    ) -> None:
+    def __init__(self, ann_df: pd.DataFrame, sequences: Dict[str, str], split: Literal["train", "val", "test"]) -> None:
         """
         Initialize dataset.
 
-        :param metadata: must at least contain three columns:
+        :param ann_df: must at least contain three columns:
                             - uniprot_id
-                            - examples: A set of strings defining the protein
-                            - split: name of the split the uniprot_id belongs
+                            - annotation: A set of strings defining the protein
+                            - split: name of the split the id belongs
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param split: split name
         """
         logger.info(f"preparing {split} dataset")
         self.split = split
-        self.split_df = metadata[metadata.split == self.split][["uniprot_id", "examples"]]
+        self.split_df = ann_df.loc[ann_df.split == self.split, ["uniprot_id", "annotation"]]
         self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
-        self.split_df = self.split_df.explode("examples", ignore_index=True)
 
     def __len__(self) -> int:
         """Get dataset length."""
@@ -54,16 +51,17 @@ class PikaLiteDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
 
     def __init__(
         self,
-        metadata: pd.DataFrame,
+        metrics_df: pd.DataFrame,
         sequences: Dict[str, str],
         split: Literal["train", "val", "test"],
     ) -> None:
         """
         Initialize dataset.
 
-        :param metadata: must at least contain three columns:
+        :param metrics_df: must contain following columns:
                             - uniprot_id
-                            - examples: A set of strings defining the protein
+                            - metric
+                            - value
                             - split: name of the split the uniprot_id belongs
         :param sequences: dict of uniprot_ids mapped to the sequence
         :param split: split name
@@ -81,15 +79,12 @@ class PikaLiteDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
             "mw": "What is the molecular weight of this protein?",
         }
         self.split = split
-        self.split_df = metadata[metadata.split == self.split].drop("split", axis=1)
+        self.split_df = metrics_df[metrics_df.split == self.split].drop("split", axis=1)
+        self.split_df = self.split_df[self.split_df["metric"].isin(self.question_mapping)]
+        self.split_df = self.split_df.reset_index(drop=True)
+        self.split_df = self.split_df[["uniprot_id", "metric", "value"]]
 
         self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
-
-        self.split_df = self.split_df.melt(id_vars=["uniprot_id"], var_name="metric", value_name="value")
-        # Filter questions
-        self.split_df = self.split_df[self.split_df["metric"].isin(self.question_mapping)]
-        self.split_df = self.split_df[self.split_df["value"].map(lambda x: str(x) != "nan")]
-        self.split_df = self.split_df.reset_index(drop=True)
 
         # add shuffled sequences for unreal proteins
         unreal_ids = self.split_df[(self.split_df["metric"] == "is_real") & (self.split_df["value"] == False)]
@@ -114,11 +109,11 @@ class PikaLiteDataset(Dataset[Tuple[str, str, str, str | int | bool]]):
 class PikaReActDataset(Dataset[Tuple[str, str, str, str]]):
     """Pika torch dataset for inference with Biochem-ReAct questions."""
 
-    def __init__(self, metadata: pd.DataFrame, sequences: Dict[str, str], subject: str) -> None:
+    def __init__(self, react_df: pd.DataFrame, sequences: Dict[str, str], subject: str) -> None:
         """
         Initialize dataset.
 
-        :param metadata: must at least contain three columns:
+        :param react_df: must at least contain three columns:
                             - uniprot_id
                             - subjects: name of the subject
                             - ground_truth: true answer to the subject of test
@@ -131,10 +126,9 @@ class PikaReActDataset(Dataset[Tuple[str, str, str, str]]):
             "catalytic activity": "What chemical reaction is catalyzed by this protein?",
             "cofactor": "What are the cofactors of this protein?",
             "functional domains": "What are the functional domains of this protein?",
-            "taxonomy": "To what taxonomic group or organism does this protein belong?",
         }
         self.question = question_mapping[subject]
-        self.split_df = metadata[metadata.subjects == subject][["uniprot_id", "ground_truth"]]
+        self.split_df = react_df[react_df.subjects == subject][["uniprot_id", "ground_truth"]]
         self.sequences = {k: sequences[k] for k in self.split_df["uniprot_id"]}
 
     def __len__(self) -> int:

@@ -1,8 +1,9 @@
 {
   "seed": 0,
   "datamodule": {
-    "data_dict_path": "dataset/pika_data.pkl",
-    "split_path": "dataset/pika_split_1.csv",
+    "sequence_data_path": "dataset/pika_sequences.csv",
+    "metrics_data_path": "dataset/pika_metrics.csv",
+    "split_path": "dataset/pika_uniref_split.csv",
     "classification_task": "is_enzyme",
     "max_protein_length": 1500,
     "train_batch_size": 32,
@@ -11,7 +12,7 @@
   },
   "model": {
     "protein_model": "esm2_t33_650M_UR50D",
-    "classifier": "linear",
+    "classifier": "mlp",
     "protein_layer_to_use": -1,
     "lr": 1e-4,
     "weight_decay": 1e-4

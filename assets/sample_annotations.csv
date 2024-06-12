@@ -1,0 +1,176 @@
+uniprot_id,type,annotation
+A0A009IHW8,fields,"catalytic activity: NAD(+) = 2'cADPR + H(+) + nicotinamide, H2O + NAD(+) = ADP-D-ribose + H(+) + nicotinamide, EC = 3.2.2.6, H2O + NADP(+) = ADP-D-ribose 2'-phosphate + H(+) + nicotinamide"
+A0A009IHW8,fields,"subunit: In the presence of NAD(+) analog 8-amino-isoquinoline adenine dinucleotide (3AD) forms filaments with 3AD between monomers; conformational changes occur upon 3AD binding., Homodimer"
+A0A009IHW8,fields,"functional domains: NAD+ nucleosidase activity, Toll/interleukin-1 receptor homology (TIR) domain, NAD(P)+ nucleosidase activity, Toll/Interleukin receptor TIR domain, NAD+ nucleotidase, cyclic ADP-ribose generating"
+A0A009IHW8,fields,"taxonomy: Bacteria, Pseudomonadota, Gammaproteobacteria"
+A0A009IHW8,fields,"protein size: 269 aa, 30922 KDa"
+A0A009IHW8,summary,The protein is a homodimeric enzyme with a size of 269 amino acids and a molecular weight of 30922 KDa
+A0A009IHW8,summary,"It belongs to the bacteria group, specifically in the Pseudomonadota phylum within the Gammaproteobacteria class"
+A0A009IHW8,summary,"The protein exhibits catalytic activity, specifically NAD(+) nucleosidase activity, NAD(P)(+) nucleosidase activity, and cyclic ADP-ribose generating activity"
+A0A009IHW8,summary,"It catalyzes the conversion of NAD(+) into 2'-cADPR, H(+), and nicotinamide, as well as the hydrolysis of NAD(+) and NADP(+) to produce ADP-D-ribose, H(+), and nicotinamide"
+A0A009IHW8,summary,The protein is composed of functional domains such as the Toll/interleukin-1 receptor homology (TIR) domain
+A0A009IHW8,summary,"In the presence of the NAD(+) analog 8-amino-isoquinoline adenine dinucleotide (3AD), the protein forms filaments with 3AD between monomers, leading to conformational changes upon 3AD binding."
+A0A009IHW8,qa,What is the molecular weight of the protein? The protein has a molecular weight of 30922 KDa.
+A0A009IHW8,qa,"What is the catalytic activity of the protein? The protein exhibits NAD(+) nucleosidase activity, NAD(P)(+) nucleosidase activity, and cyclic ADP-ribose generating activity."
+A0A009IHW8,qa,What is the size of the protein in terms of amino acids? The protein consists of 269 amino acids.
+A0A009IHW8,qa,Which phylum does the protein belong to? The protein belongs to the Pseudomonadota phylum.
+A0A009IHW8,qa,What domains can be found in the protein? The protein contains a Toll/interleukin-1 receptor homology (TIR) domain.
+A0A009IHW8,qa,What class does the protein belong to? The protein is classified in the Gammaproteobacteria class.
+A0A009IHW8,qa,What is the subunit composition of the protein? The protein is a homodimer.
+A0A009IHW8,qa,"What is the taxonomy of the protein? The protein is classified as Bacteria, specifically in the Pseudomonadota group within the Gammaproteobacteria class."
+A0A009IHW8,qa,"What reactions can the protein catalyze? The protein can convert NAD(+) into 2'-cADPR, H(+), and nicotinamide, as well as hydrolyze NAD(+) and NADP(+) to produce ADP-D-ribose, H(+), and nicotinamide."
+A0A009IHW8,qa,"How does the presence of 8-amino-isoquinoline adenine dinucleotide (3AD) affect the protein? In the presence of 3AD, the protein forms filaments with 3AD between monomers and undergoes conformational changes upon 3AD binding."
+A0A009IHW8,qa,Is this protein an enzyme? Yes
+A0A067XGX8,fields,"catalytic activity: D-erythrose 4-phosphate + H2O + phosphoenolpyruvate = 7-phospho-2-dehydro-3-deoxy-D-arabino-heptonate + phosphate, EC = 2.5.1.54"
+A0A067XGX8,fields,"cofactor: Mn(2+), Binds 1 divalent metal cation per subunit that could be manganese."
+A0A067XGX8,fields,subunit: Homodimer.
+A0A067XGX8,fields,"subcellular location: Chloroplast, Plastid"
+A0A067XGX8,fields,"functional domains: Aldolase class I, 3-deoxy-7-phosphoheptulonate synthase activity, Aldolase, metal ion binding"
+A0A067XGX8,fields,"taxonomy: Eukaryota, Viridiplantae, Streptophyta"
+A0A067XGX8,fields,"protein size: 512 aa, 57062 KDa"
+A0A067XGX8,summary,This protein is a homodimeric enzyme belonging to the Aldolase class I family
+A0A067XGX8,summary,It has a size of 512 amino acids and a molecular weight of 57062 KDa
+A0A067XGX8,summary,"The protein is primarily found in the chloroplasts and plastids of eukaryotic organisms, specifically from the lineage Viridiplantae in the Streptophyta group"
+A0A067XGX8,summary,"It possesses a critical functional domain with 3-deoxy-7-phosphoheptulonate synthase activity, which is involved in a catalytic reaction resulting in the formation of 7-phospho-2-dehydro-3-deoxy-D-arabino-heptonate and phosphate"
+A0A067XGX8,summary,"The enzyme requires the presence of a divalent metal cation, particularly manganese, for its proper functioning."
+A0A067XGX8,qa,"What is the catalytic activity of this protein? It catalyzes the reaction between D-erythrose 4-phosphate, H2O, and phosphoenolpyruvate to produce 7-phospho-2-dehydro-3-deoxy-D-arabino-heptonate and phosphate."
+A0A067XGX8,qa,"What is the role of the metal cofactor in this protein? The protein binds one divalent metal cation per subunit, with manganese being a suitable option."
+A0A067XGX8,qa,"What is the subunit composition of this protein? It is composed of homodimers, meaning that each unit is identical to the other."
+A0A067XGX8,qa,Where is this protein predominantly localized within the cell? It is primarily found in the chloroplasts and plastids.
+A0A067XGX8,qa,"What are the functional domains of this protein? It possesses the Aldolase class I domain, which is responsible for its enzymatic activity, specifically as a 3-deoxy-7-phosphoheptulonate synthase. Additionally, it also has a metal ion binding domain."
+A0A067XGX8,qa,What is the taxonomy of this protein? It belongs to the Eukaryota domain and is specifically classified under the Viridiplantae phylum in the Streptophyta group.
+A0A067XGX8,qa,What is the size and molecular weight of this protein? It has a size of 512 amino acids and a molecular weight of 57062 KDa.
+A0A067XGX8,qa,Can this protein act as an enzyme? Yes
+A0A067XH53,fields,"catalytic activity: D-erythrose 4-phosphate + H2O + phosphoenolpyruvate = 7-phospho-2-dehydro-3-deoxy-D-arabino-heptonate + phosphate, EC = 2.5.1.54"
+A0A067XH53,fields,"cofactor: Mn(2+), Binds 1 divalent metal cation per subunit that could be manganese."
+A0A067XH53,fields,subunit: Homodimer.
+A0A067XH53,fields,"subcellular location: Chloroplast, Plastid"
+A0A067XH53,fields,"functional domains: Aldolase class I, 3-deoxy-7-phosphoheptulonate synthase activity, Aldolase, metal ion binding"
+A0A067XH53,fields,"taxonomy: Eukaryota, Viridiplantae, Streptophyta"
+A0A067XH53,fields,"protein size: 533 aa, 58894 KDa"
+A0A067XH53,summary,This protein is a homodimeric enzyme belonging to the Aldolase class I family
+A0A067XH53,summary,It has a size of 533 amino acids and a molecular weight of 58894 KDa
+A0A067XH53,summary,"The protein is involved in the synthesis of 3-deoxy-7-phosphoheptulonate (DAHP), an essential intermediate in the shikimate pathway"
+A0A067XH53,summary,It catalyzes a critical step in this pathway by combining D-erythrose 4-phosphate and phosphoenolpyruvate in the presence of water to produce 7-phospho-2-dehydro-3-deoxy-D-arabino-heptonate (DDAH) and phosphate
+A0A067XH53,summary,"The enzyme requires the presence of a divalent metal cation, specifically manganese, for its activity"
+A0A067XH53,summary,"This protein is primarily localized in the chloroplast, which is a plastid organelle found in eukaryotic cells"
+A0A067XH53,summary,"Overall, the protein's functional properties include its role as an Aldolase enzyme with 3-deoxy-7-phosphoheptulonate synthase activity, its binding capability for a divalent metal cation (manganese), and its involvement in the shikimate pathway for the synthesis of key metabolites."
+A0A067XH53,qa,"What is the catalytic activity of this protein? The catalytic activity of this protein is the conversion of D-erythrose 4-phosphate, H2O, and phosphoenolpyruvate into 7-phospho-2-dehydro-3-deoxy-D-arabino-heptonate and phosphate."
+A0A067XH53,qa,"What is the cofactor requirement for this protein? This protein requires Mn(2+) as a cofactor and can bind one divalent metal cation per subunit, which is typically manganese."
+A0A067XH53,qa,What is the subunit composition of this protein? This protein consists of homodimeric subunits.
+A0A067XH53,qa,"In which cellular location is this protein primarily found? This protein is primarily localized in the chloroplast, which is a type of plastid organelle."
+A0A067XH53,qa,"What are the functional domains of this protein? The functional domains of this protein include Aldolase class I, 3-deoxy-7-phosphoheptulonate synthase activity, Aldolase, and metal ion binding."
+A0A067XH53,qa,"What is the taxonomy classification of this protein? This protein belongs to the taxonomic groups Eukaryota, Viridiplantae, and Streptophyta."
+A0A067XH53,qa,What is the size and molecular weight of this protein? This protein has a size of 533 amino acids and a molecular weight of 58894 KDa.
+A0A067XH53,qa,Does this protein function as an enzyme? Yes
+A0A068BGA5,fields,"catalytic activity: benzoyl-CoA + ethanol = CoA + ethyl benzoate, 2-(methylsulfanyl)acetyl-CoA + butan-1-ol = butyl 2-(methylsulfanyl)acetate + CoA, 3-(methylsulfanyl)propanoyl-CoA + butan-1-ol = butyl 3-(methylsulfanyl)propanoate + CoA, benzoyl-CoA + butan-1-ol = butyl benzoate + CoA"
+A0A068BGA5,fields,"functional domains: Chloramphenicol acetyltransferase-like domain, acyltransferase activity"
+A0A068BGA5,fields,"taxonomy: Eukaryota, Viridiplantae, Streptophyta"
+A0A068BGA5,fields,"protein size: 456 aa, 50972 KDa"
+A0A068BGA5,summary,This protein has a chloramphenicol acetyltransferase-like domain and exhibits acyltransferase activity
+A0A068BGA5,summary,"It is found in eukaryotic organisms, specifically within the Viridiplantae group of the Streptophyta kingdom"
+A0A068BGA5,summary,The protein consists of 456 amino acids and has a molecular weight of 50972 KDa
+A0A068BGA5,summary,"It catalyzes several reactions, including the conversion of benzoyl-CoA and ethanol into CoA and ethyl benzoate, 2-(methylsulfanyl)acetyl-CoA and butan-1-ol into butyl 2-(methylsulfanyl)acetate and CoA, 3-(methylsulfanyl)propanoyl-CoA and butan-1-ol into butyl 3-(methylsulfanyl)propanoate and CoA, and benzoyl-CoA and butan-1-ol into butyl benzoate and CoA."
+A0A068BGA5,qa,What are the functional domains of this protein? It has a Chloramphenicol acetyltransferase-like domain.
+A0A068BGA5,qa,What is the size of this protein in terms of amino acids? It consists of 456 amino acids.
+A0A068BGA5,qa,"What is the taxonomic classification of this protein? It belongs to the Eukaryota domain, specifically the Viridiplantae group of the Streptophyta kingdom."
+A0A068BGA5,qa,What is the molecular weight of this protein? It has a molecular weight of 50972 KDa.
+A0A068BGA5,qa,"What types of reactions does this protein catalyze? It catalyzes the conversion of benzoyl-CoA and ethanol into CoA and ethyl benzoate, 2-(methylsulfanyl)acetyl-CoA and butan-1-ol into butyl 2-(methylsulfanyl)acetate and CoA, 3-(methylsulfanyl)propanoyl-CoA and butan-1-ol into butyl 3-(methylsulfanyl)propanoate and CoA, and benzoyl-CoA and butan-1-ol into butyl benzoate and CoA."
+A0A068BGA5,qa,Does this protein function as an enzyme? Yes
+A0A072VHJ1,fields,"subcellular location: Multi-pass membrane protein, Cell membrane"
+A0A072VHJ1,fields,"functional domains: Ammonium transporter AmtB like domains, ammonium transmembrane transporter activity, Ammonium transporter"
+A0A072VHJ1,fields,"taxonomy: Eukaryota, Viridiplantae, Streptophyta"
+A0A072VHJ1,fields,"protein size: 481 aa, 52906 KDa"
+A0A072VHJ1,summary,This protein is a multi-pass membrane protein primarily located in the cell membrane
+A0A072VHJ1,summary,It belongs to the Ammonium transporter AmtB-like domain family and exhibits ammonium transmembrane transporter activity
+A0A072VHJ1,summary,"It is found in organisms classified under the Eukaryota domain, specifically in Viridiplantae (green plants) belonging to the Streptophyta group"
+A0A072VHJ1,summary,The protein consists of 481 amino acids and has a molecular weight of 52906 KDa.
+A0A072VHJ1,qa,What is the subcellular location of this protein? The subcellular location of this protein is the cell membrane.
+A0A072VHJ1,qa,What is the functional domain of this protein? The functional domain of this protein is the Ammonium transporter AmtB-like domain.
+A0A072VHJ1,qa,What activity does this protein exhibit? This protein exhibits ammonium transmembrane transporter activity.
+A0A072VHJ1,qa,"What is the taxonomy of organisms this protein is found in? This protein is found in organisms classified under the Eukaryota domain, specifically in Viridiplantae (green plants) belonging to the Streptophyta group."
+A0A072VHJ1,qa,How long is this protein in terms of amino acids? This protein consists of 481 amino acids.
+A0A072VHJ1,qa,What is the molecular weight of this protein? The molecular weight of this protein is 52906 KDa.
+A0A072VHJ1,qa,Does this protein function as an enzyme? No
+A0A073CEA3,fields,"catalytic activity: EC = 4.1.1.100, H(+) + prephenate = 3-[(4R)-4-hydroxycyclohexa-1,5-dien-1-yl]-2-oxopropanoate + CO2"
+A0A073CEA3,fields,"functional domains: Periplasmic binding protein-like II, lyase activity"
+A0A073CEA3,fields,"taxonomy: Bacteria, Cyanobacteriota, Cyanophyceae"
+A0A073CEA3,fields,"protein size: 202 aa, 23114 KDa"
+A0A073CEA3,summary,"This protein is a lyase enzyme found in bacteria, specifically in the Cyanobacteriota phylum, more specifically in the Cyanophyceae class"
+A0A073CEA3,summary,"It has a size of 202 amino acids, with a molecular weight of 23,114 Daltons"
+A0A073CEA3,summary,The protein exhibits catalytic activity with the enzyme commission (EC) number 4.1.1.100
+A0A073CEA3,summary,"It catalyzes the conversion of H(+) and prephenate into 3-[(4R)-4-hydroxycyclohexa-1,5-dien-1-yl]-2-oxopropanoate and CO2"
+A0A073CEA3,summary,The protein possesses functional domains including Periplasmic binding protein-like II and lyase activity.
+A0A073CEA3,qa,"What is the catalytic activity of this protein? The catalytic activity of this protein is the conversion of H(+) and prephenate into 3-[(4R)-4-hydroxycyclohexa-1,5-dien-1-yl]-2-oxopropanoate and CO2."
+A0A073CEA3,qa,What are the functional domains of this protein? The functional domains of this protein include Periplasmic binding protein-like II and lyase activity.
+A0A073CEA3,qa,"What is the taxonomy of this protein? This protein belongs to the Bacteria kingdom, specifically the Cyanobacteriota phylum, and the Cyanophyceae class."
+A0A073CEA3,qa,"What is the size of this protein? This protein has a size of 202 amino acids and a molecular weight of 23,114 Daltons."
+A0A073CEA3,qa,Can this protein be correctly termed an enzyme? Yes
+A0A075TMP8,fields,catalytic activity: 3-hydroxybenzyl alcohol + O2 + reduced [NADPH--hemoprotein reductase] = gentisyl alcohol + H(+) + H2O + oxidized [NADPH--hemoprotein reductase]
+A0A075TMP8,fields,cofactor: heme
+A0A075TMP8,fields,"subcellular location: Endoplasmic reticulum membrane, Single-pass membrane protein"
+A0A075TMP8,fields,"functional domains: iron ion binding, heme binding, polyketide synthase activity, Cytochrome P450, monooxygenase activity, oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen"
+A0A075TMP8,fields,"taxonomy: Eukaryota, Fungi, Dikarya"
+A0A075TMP8,fields,"protein size: 526 aa, 60437 KDa"
+A0A075TMP8,summary,This protein is a monooxygenase enzyme belonging to the Cytochrome P450 superfamily
+A0A075TMP8,summary,"It possesses various functional domains, including iron ion binding, heme binding, and polyketide synthase activity"
+A0A075TMP8,summary,The protein is localized in the endoplasmic reticulum membrane and functions as a single-pass membrane protein
+A0A075TMP8,summary,"Its catalytic activity involves the oxidation of 3-hydroxybenzyl alcohol, utilizing oxygen and reduced NADPH-hemoprotein reductase as cofactors, resulting in the formation of gentisyl alcohol, protons, water, and oxidized NADPH-hemoprotein reductase"
+A0A075TMP8,summary,The protein is involved in the metabolism of certain compounds through enzymatic reactions that incorporate or reduce molecular oxygen
+A0A075TMP8,summary,"It is found in eukaryotes, specifically within the fungi subgroup called Dikarya"
+A0A075TMP8,summary,"The protein has a size of 526 amino acids and a molecular weight of approximately 60,437 Daltons."
+A0A075TMP8,qa,"What is the catalytic activity of this protein? The catalytic activity of this protein is the oxidation of 3-hydroxybenzyl alcohol, using oxygen and reduced NADPH-hemoprotein reductase, resulting in the formation of gentisyl alcohol, protons, water, and oxidized NADPH-hemoprotein reductase."
+A0A075TMP8,qa,Where is this protein localized? This protein is localized in the endoplasmic reticulum membrane as a single-pass membrane protein.
+A0A075TMP8,qa,"What are the functional domains of this protein? The functional domains of this protein include iron ion binding, heme binding, polyketide synthase activity, Cytochrome P450, monooxygenase activity, and oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen."
+A0A075TMP8,qa,"What is the taxonomic classification of this protein? This protein is found in eukaryotes, specifically within the fungi subgroup called Dikarya."
+A0A075TMP8,qa,"What is the size of this protein? This protein has a size of 526 amino acids and a molecular weight of approximately 60,437 Daltons."
+A0A075TMP8,qa,Is this protein an enzyme? No
+A0A075TR41,fields,"subcellular location: Vacuole lumen, Cytoplasmic vesicle lumen"
+A0A075TR41,fields,"functional domains: Jelly Rolls, oxidoreductase activity, RmlC-like cupins, polyketide synthase activity"
+A0A075TR41,fields,"taxonomy: Eukaryota, Fungi, Dikarya"
+A0A075TR41,fields,"protein size: 326 aa, 36772 KDa"
+A0A075TR41,summary,"This protein is found in the vacuole lumen and cytoplasmic vesicle lumen of eukaryotic organisms, specifically in the fungi group of dikarya"
+A0A075TR41,summary,It has a size of 326 amino acids and a molecular weight of 36772 KDa
+A0A075TR41,summary,The protein contains functional domains called Jelly Rolls and RmlC-like cupins
+A0A075TR41,summary,It exhibits polyketide synthase activity and oxidoreductase activity.
+A0A075TR41,qa,What are the subcellular locations where this protein is found? It is found in the vacuole lumen and cytoplasmic vesicle lumen.
+A0A075TR41,qa,What are the functional domains present in this protein? It contains Jelly Rolls and RmlC-like cupins.
+A0A075TR41,qa,What is the size of this protein? It has a size of 326 amino acids.
+A0A075TR41,qa,What is the molecular weight of this protein? Its molecular weight is 36772 KDa.
+A0A075TR41,qa,What is the taxonomy of this protein? It belongs to the eukaryotic organisms within the fungi group of dikarya.
+A0A075TR41,qa,What enzymatic activities does this protein exhibit? It exhibits polyketide synthase activity and oxidoreductase activity.
+A0A075TR41,qa,Does this protein possess the characteristics of an enzyme? Yes
+A0A075TRL5,fields,catalytic activity: 3-methylphenol + O2 + reduced [NADPH--hemoprotein reductase] = 3-hydroxybenzyl alcohol + H(+) + H2O + oxidized [NADPH--hemoprotein reductase]
+A0A075TRL5,fields,cofactor: heme
+A0A075TRL5,fields,"subcellular location: Endoplasmic reticulum membrane, Single-pass membrane protein"
+A0A075TRL5,fields,"functional domains: iron ion binding, heme binding, polyketide synthase activity, Cytochrome P450, monooxygenase activity, oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen"
+A0A075TRL5,fields,"taxonomy: Eukaryota, Fungi, Dikarya"
+A0A075TRL5,fields,"protein size: 524 aa, 60202 KDa"
+A0A075TRL5,summary,This protein is a multifunctional enzyme classified as a cytochrome P450 monooxygenase
+A0A075TRL5,summary,It is found in the endoplasmic reticulum membrane and belongs to the eukaryotic fungi group known as Dikarya
+A0A075TRL5,summary,"Structurally, the protein consists of 524 amino acids with a molecular weight of 60202 KDa"
+A0A075TRL5,summary,"It contains functional domains involved in iron ion binding, heme binding, polyketide synthase activity, and oxidoreductase activity"
+A0A075TRL5,summary,"The protein's catalytic activity involves the conversion of 3-methylphenol, oxygen, and reduced NADPH-hemoprotein reductase into 3-hydroxybenzyl alcohol, H(+), water, and oxidized NADPH-hemoprotein reductase"
+A0A075TRL5,summary,It relies on heme as a cofactor for its enzymatic reactions.
+A0A075TRL5,qa,What is the subcellular location of this protein? The subcellular location of this protein is the endoplasmic reticulum membrane.
+A0A075TRL5,qa,What is the taxonomy classification of this protein? This protein belongs to the eukaryotic fungi group known as Dikarya.
+A0A075TRL5,qa,"What are the functional domains of this protein? The functional domains of this protein include iron ion binding, heme binding, polyketide synthase activity, Cytochrome P450, monooxygenase activity, and oxidoreductase activity."
+A0A075TRL5,qa,"What is the catalytic activity of this protein? The catalytic activity of this protein involves the conversion of 3-methylphenol, oxygen, and reduced NADPH-hemoprotein reductase into 3-hydroxybenzyl alcohol, H(+), water, and oxidized NADPH-hemoprotein reductase."
+A0A075TRL5,qa,What is the cofactor required for the enzymatic reactions of this protein? The cofactor required for the enzymatic reactions of this protein is heme.
+A0A075TRL5,qa,What is the size of this protein in terms of amino acids and molecular weight? This protein consists of 524 amino acids and has a molecular weight of 60202 KDa.
+A0A075TRL5,qa,Does this protein function as an enzyme? Yes
+A0A084R1H6,fields,"functional domains: ACP-like, Malonyl-Coenzyme A Acyl Carrier Protein, domain 2, NAD(P)-binding Rossmann-fold domains, oxidoreductase activity, Thiolase-like, acyltransferase activity, NAD(P)-binding Rossmann-like Domain, FabD/lysophospholipase-like, GroES-like, Probable ACP-binding domain of malonyl-CoA ACP transacylase, phosphopantetheine binding, Medium-chain alcohol dehydrogenases, catalytic domain, Polyketide synthase dehydratase"
+A0A084R1H6,fields,"taxonomy: Eukaryota, Fungi, Dikarya"
+A0A084R1H6,fields,"protein size: 2435 aa, 263256 KDa"
+A0A084R1H6,summary,This protein is a large multi-domain enzyme involved in various biochemical and functional processes
+A0A084R1H6,summary,"It consists of several functional domains including ACP-like, Malonyl-Coenzyme A Acyl Carrier Protein, domain 2, NAD(P)-binding Rossmann-fold domains, Thiolase-like, and FabD/lysophospholipase-like"
+A0A084R1H6,summary,"These domains are responsible for different activities such as oxidoreductase activity, acyltransferase activity, and phosphopantetheine binding"
+A0A084R1H6,summary,"Additionally, the protein contains a catalytic domain known as Medium-chain alcohol dehydrogenases and a Polyketide synthase dehydratase domain"
+A0A084R1H6,summary,"The protein is found in eukaryotes, specifically in the taxonomic groups Fungi and Dikarya"
+A0A084R1H6,summary,It has a large size of 2435 amino acids and a high molecular weight of 263256 KDa.
+A0A084R1H6,qa,"What are the key functional domains of this protein? The key functional domains of this protein include ACP-like, Malonyl-Coenzyme A Acyl Carrier Protein, domain 2, NAD(P)-binding Rossmann-fold domains, Thiolase-like, FabD/lysophospholipase-like, phosphopantetheine binding, Medium-chain alcohol dehydrogenases, and Polyketide synthase dehydratase."
+A0A084R1H6,qa,"What is the main activity associated with this protein? The main activities associated with this protein include oxidoreductase activity, acyltransferase activity, and phosphopantetheine binding."
+A0A084R1H6,qa,"What is the taxonomic classification of this protein? This protein is found in eukaryotes, specifically in the taxonomic groups Fungi and Dikarya."
+A0A084R1H6,qa,How large is this protein in terms of amino acids? This protein has a size of 2435 amino acids.
+A0A084R1H6,qa,What is the molecular weight of this protein? The molecular weight of this protein is 263256 KDa.
+A0A084R1H6,qa,Is this protein an enzyme? Yes

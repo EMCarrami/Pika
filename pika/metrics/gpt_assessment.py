@@ -51,7 +51,12 @@ def get_gpt_metrics(
     file_name = table_path.split("/")[-1]
     results_path = f'{save_dir}/{file_name.replace(".ckpt", ".tsv")}'
     os.makedirs(save_dir, exist_ok=True)
-    assert not os.path.isfile(results_path)
+    results_path_extn, results_path_v = ".tsv", 0
+    while os.path.isfile(results_path):
+        results_path_v += 1
+        results_path = results_path.replace(results_path_extn, f"-v{results_path_v}.tsv")
+        results_path_extn = f"-v{results_path_v}.tsv"
+    logger.info(f"results will be saved in {results_path}")
     np.random.seed(0)
     df = pd.read_csv(table_path, delimiter="\t")
     if isinstance(subsample, list):

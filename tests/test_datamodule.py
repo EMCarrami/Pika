@@ -11,7 +11,9 @@ from pika.utils.model_utils import CONTROL_QUESTIONS
 class TestPikaDataModule(unittest.TestCase):
     """Test class for Pika Datamodule."""
 
-    sample_data_path: str
+    sample_sequences_path: str
+    sample_annotations_path: str
+    sample_metrics_path: str
     sample_split_path: str
     batch_size: int
     datamodule: PikaDataModule
@@ -20,18 +22,22 @@ class TestPikaDataModule(unittest.TestCase):
     def setUpClass(cls) -> None:
         super(TestPikaDataModule, cls).setUpClass()
         assets_path = os.path.join(os.path.dirname(__file__), "../assets")
-        cls.sample_data_path = os.path.join(assets_path, "sample_data.pkl")
+        cls.sample_sequences_path = os.path.join(assets_path, "sample_sequences.csv")
+        cls.sample_annotations_path = os.path.join(assets_path, "sample_annotations.csv")
+        cls.sample_metrics_path = os.path.join(assets_path, "sample_metrics.csv")
         cls.sample_split_path = os.path.join(assets_path, "sample_split.csv")
         cls.batch_size = 2
         cls.datamodule = PikaDataModule(
-            data_dict_path=cls.sample_data_path,
+            sequence_data_path=cls.sample_sequences_path,
+            annotations_path=cls.sample_annotations_path,
+            metrics_data_path=cls.sample_metrics_path,
             split_path=cls.sample_split_path,
             language_model="gpt2",
             protein_model="esm2_t6_8M_UR50D",
             max_protein_length=1500,
             train_batch_size=cls.batch_size,
             eval_batch_size=cls.batch_size,
-            test_subjects=["domains", "reaction", "taxonomy"],
+            test_subjects=["domains", "reaction"],
         )
 
     def test_train_dataloader(self) -> None:
@@ -72,7 +78,7 @@ class TestPikaDataModule(unittest.TestCase):
         test_loaders = self.datamodule.test_dataloader()
         # check test loader size matches subjects
         self.assertIsInstance(test_loaders, tuple)
-        self.assertEqual(len(test_loaders), 3)
+        self.assertEqual(len(test_loaders), 2)
         batch = next(iter(test_loaders[0]))
         # check batch is of current type and has the right attributes and size
         self.assertIsInstance(batch, PikaMetricData)
@@ -101,12 +107,14 @@ class TestPikaDataModule(unittest.TestCase):
         train_df = self.datamodule.train_dataset.split_df
         val0_df = self.datamodule.val_dataset.split_df
         val1_df = self.datamodule.val_metric_dataset.split_df
-        self.assertIn("control_question", train_df["examples"].to_list())
-        self.assertIn("control_question", val0_df["examples"].to_list())
+        self.assertIn("control_question", train_df["annotation"].to_list())
+        self.assertIn("control_question", val0_df["annotation"].to_list())
         self.assertIn("is_real", val1_df["metric"].to_list())
         # ensure fields aren't there when control question not needed
         neg_dm = PikaDataModule(
-            data_dict_path=self.sample_data_path,
+            sequence_data_path=self.sample_sequences_path,
+            annotations_path=self.sample_annotations_path,
+            metrics_data_path=self.sample_metrics_path,
             split_path=self.sample_split_path,
             language_model="gpt2",
             protein_model="esm2_t6_8M_UR50D",
@@ -118,8 +126,8 @@ class TestPikaDataModule(unittest.TestCase):
         train_df = neg_dm.train_dataset.split_df
         val0_df = neg_dm.val_dataset.split_df
         val1_df = neg_dm.val_metric_dataset.split_df
-        self.assertNotIn("control_question", train_df["examples"].to_list())
-        self.assertNotIn("control_question", val0_df["examples"].to_list())
+        self.assertNotIn("control_question", train_df["annotation"].to_list())
+        self.assertNotIn("control_question", val0_df["annotation"].to_list())
         self.assertNotIn("is_real", val1_df["metric"].to_list())
 
     def test_control_question_encoded(self) -> None:
@@ -127,7 +135,7 @@ class TestPikaDataModule(unittest.TestCase):
         # check correct fields when control question needed
         original_df = self.datamodule.train_dataset.split_df
         # only keep control questions and reassign in datamodule
-        original_df = original_df[original_df.examples == "control_question"]
+        original_df = original_df[original_df.annotation == "control_question"]
         self.datamodule.train_dataset.split_df = original_df
         train_loader = self.datamodule.train_dataloader()
         batch = next(iter(train_loader))
@@ -138,16 +146,18 @@ class TestPikaDataModule(unittest.TestCase):
     def test_multi_field(self) -> None:
         """Test multi-field datamodule."""
         multi_dm = PikaDataModule(
-            data_dict_path=self.sample_data_path,
+            sequence_data_path=self.sample_sequences_path,
+            annotations_path=self.sample_annotations_path,
+            metrics_data_path=self.sample_metrics_path,
             split_path=self.sample_split_path,
             language_model="gpt2",
             protein_model="esm2_t6_8M_UR50D",
             max_protein_length=1500,
             train_batch_size=self.batch_size,
             eval_batch_size=self.batch_size,
-            data_field_names=["qa", "summary"],
+            data_types_to_use=["qa", "summary"],
             add_control_question=False,
         )
         train_df = multi_dm.train_dataset.split_df
         # ensure both questions (with ?) and summary sentences (without ?) are present in examples
-        self.assertEqual(set(train_df["examples"].map(lambda x: "?" in x).unique()), {False, True})
+        self.assertEqual(set(train_df["annotation"].map(lambda x: "?" in x).unique()), {False, True})

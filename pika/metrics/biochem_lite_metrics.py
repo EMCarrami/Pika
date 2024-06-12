@@ -22,6 +22,8 @@ class BiochemLiteMetrics(Metric):
         """Update metric name and value states."""
         for pred, label, name in zip(predictions, labels, metric_names):
             pred = pred.lower()
+            label = False if label in ["false", "False"] else label
+            label = True if label in ["true", "True"] else label
             if isinstance(label, bool):
                 # remove all punctuations from pred
                 pred = pred.translate(str.maketrans("", "", string.punctuation))

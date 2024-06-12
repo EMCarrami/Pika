@@ -1,6 +1,5 @@
-import pickle
 from collections import namedtuple
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Dict, List, Literal, Tuple
 
 import numpy as np
 import pandas as pd
@@ -19,7 +18,8 @@ class ClassificationDataModule(LightningDataModule):
 
     def __init__(
         self,
-        data_dict_path: str,
+        sequence_data_path: str,
+        metrics_data_path: str,
         split_path: str,
         classification_task: str,
         protein_model: str,
@@ -32,7 +32,8 @@ class ClassificationDataModule(LightningDataModule):
         """
         Load tokenizers and instantiate datasets.
 
-        :param data_dict_path: path to dict of uniprot_ids mapped to all info fields and the sequence
+        :param sequence_data_path: path to sequences csv file with "uniprot_id" and "sequence" columns
+        :param metrics_data_path: path to metrics csv file with "uniprot_id", "metric" and "value" columns
         :param split_path: path to csv with mapping of uniprot_id to split: [train, val, test]
         :param classification_task: can be one of is_enzyme, is_real, localization, kingdom, mw
         :param protein_model: esm model to use for tokenizer
@@ -47,9 +48,8 @@ class ClassificationDataModule(LightningDataModule):
             "is_enzyme",
             "is_real",
             "localization",
-            "kingdom",
             "mw",
-        ], "classification_task should be one of is_enzyme, is_real, localization, kingdom, mw."
+        ], "classification_task should be one of is_enzyme, is_real, localization, mw."
         self.num_workers = num_workers
         self.train_batch_size = train_batch_size
         self.eval_batch_size = 4 * train_batch_size if eval_batch_size is None else eval_batch_size
@@ -57,43 +57,38 @@ class ClassificationDataModule(LightningDataModule):
         self.protein_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{protein_model}")
         self.protein_tokenizer.model_max_length = max_protein_length
 
-        with open(data_dict_path, "rb") as f:
-            data_dict: Dict[str, Any] = pickle.load(f)
-        sequences: Dict[str, str] = {uid: v["sequence"] for uid, v in data_dict.items()}
+        metadata = pd.read_csv(sequence_data_path)
+        metrics_df = pd.read_csv(metrics_data_path)
+        splits_map = pd.read_csv(split_path).set_index("uniprot_id")["split"].to_dict()
+        metadata["split"] = metadata["uniprot_id"].map(splits_map)
+        metrics_df["split"] = metrics_df["uniprot_id"].map(splits_map)
 
-        # set up splits
-        metadata = pd.read_csv(split_path)
-        assert (
-            "uniprot_id" in metadata.columns and "split" in metadata.columns
-        ), "split_path must be a csv file with column headers providing uniprot_id and split"
-        assert all([i in data_dict for i in metadata["uniprot_id"]]), (
-            f"all uniprot_id of {split_path} must be present in {data_dict_path}. "
-            f"missing keys: {set(metadata['uniprot_id'].to_list()) - set(data_dict.keys())}"
-        )
-        metadata.loc[:, "protein_length"] = metadata["uniprot_id"].apply(lambda x: len(data_dict[x]["sequence"]))
-        metadata.loc[:, "uniref_id"] = metadata["uniprot_id"].apply(lambda x: data_dict[x]["uniref_id"])
-        metadata = metadata[metadata["protein_length"] <= max_protein_length]
-        metadata = metadata[metadata["protein_length"] >= min_protein_length]
+        # apply protein length filters
+        if "length" not in metadata.columns:
+            metadata.loc[:, "length"] = metadata["sequence"].apply(len)
+        metadata = metadata[metadata["length"] <= max_protein_length]
+        metadata = metadata[metadata["length"] >= min_protein_length]
+        metrics_df = metrics_df[metrics_df["uniprot_id"].isin(metadata["uniprot_id"].to_list())]
         metadata.reset_index(drop=True, inplace=True)
+        metrics_df.reset_index(drop=True, inplace=True)
+        sequences: Dict[str, str] = metadata.set_index("uniprot_id")["sequence"].to_dict()
 
-        metrics_df = pd.DataFrame.from_dict({k: v["metrics"] for k, v in data_dict.items()}, orient="index")
-        metrics_df.reset_index(inplace=True)
-        metrics_df.rename(columns={"index": "uniprot_id"}, inplace=True)
-        metrics_df = pd.merge(metrics_df, metadata[["uniprot_id", "split"]], on="uniprot_id")
-        metrics_df["is_real"] = np.random.choice([False, True], size=len(metrics_df))
-
-        metrics_df = metrics_df[metrics_df[classification_task] != "none"]
-        metrics_df = metrics_df[metrics_df[classification_task] != "Viruses"]
+        if classification_task == "is_real":
+            metrics_df = metrics_df.drop_duplicates(subset="uniprot_id", keep="first").copy()
+            metrics_df["metric"] = "is_real"
+            metrics_df["value"] = np.random.choice([False, True], size=len(metrics_df))
+        else:
+            metrics_df = metrics_df[metrics_df.metric == classification_task]
         metrics_df = metrics_df.reset_index(drop=True)
 
         if classification_task == "mw":
+            metrics_df["class_id"] = np.log10(metrics_df["value"]).astype(np.float32)
             self.num_classes = 1
-            metrics_df["class_id"] = np.log10(metrics_df[classification_task]).astype(np.float32)
         else:
-            metrics_df["class_id"], uniques = pd.factorize(metrics_df[classification_task])
+            metrics_df["class_id"], uniques = pd.factorize(metrics_df["value"])
             self.num_classes = len(uniques)
 
-        metrics_df = metrics_df[["uniprot_id", "class_id", classification_task, "split"]]
+        metrics_df = metrics_df[["uniprot_id", "class_id", "value", "split"]]
 
         self.train_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "train")
         self.val_dataset = ClassificationDataset(metrics_df, classification_task, sequences, "val")
@@ -154,7 +149,7 @@ class ClassificationDataset(Dataset[Tuple[str, int]]):
 
         :param metadata: must at least contain three columns:
                             - uniprot_id
-                            - [classification_task]: name of the task
+                            - value: value of the metric
                             - class_id: class the protein belongs
                             - split: name of the split the uniprot_id belongs
         :param sequences: dict of uniprot_ids mapped to the sequence
@@ -171,7 +166,7 @@ class ClassificationDataset(Dataset[Tuple[str, int]]):
             self.sequences |= {
                 f"{uid}_unreal": shuffle_protein(self.sequences[uid]) for uid in unreal_ids["uniprot_id"]
             }
-        self.split_df = self.split_df[["uniprot_id", "class_id", classification_task]]
+        self.split_df = self.split_df[["uniprot_id", "class_id", "value"]]
 
     def __len__(self) -> int:
         """Get dataset length."""

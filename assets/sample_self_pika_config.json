@@ -1,11 +1,13 @@
 {
   "seed": 7,
   "datamodule": {
-    "data_dict_path": "sample_data.pkl",
+    "sequence_data_path": "sample_sequences.csv",
+    "annotations_path": "sample_annotations.csv",
+    "metrics_data_path": "sample_metrics.csv",
     "split_path": "sample_split.csv",
     "max_protein_length": 1500,
     "max_text_length": 250,
-    "data_field_names": "qa",
+    "data_types_to_use": ["qa", "summary"],
     "sequence_placeholder": "<protein sequence placeholder> ",
     "train_batch_size": 2,
     "eval_batch_size": 2,

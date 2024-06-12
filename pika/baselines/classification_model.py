@@ -66,7 +66,7 @@ class ProteinClassificationModel(LightningModule):
     def forward(self, input_ids: Tensor) -> Tensor:
         with torch.no_grad():
             embs = self.esm(input_ids)
-        logits: Tensor = self.classifier(embs)
+        logits: Tensor = self.classifier(embs.mean(1))
         return logits
 
     def general_step(self, batch: ClassificationData, mode: str) -> Tensor:

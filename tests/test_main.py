@@ -18,10 +18,8 @@ class TestPika(unittest.TestCase):
         """Run training and return Pika object."""
         assets_path = os.path.join(os.path.dirname(__file__), "../assets")
         self_config = load_config(os.path.join(assets_path, config_path))
-        self_config["datamodule"]["data_dict_path"] = os.path.join(
-            assets_path, self_config["datamodule"]["data_dict_path"]
-        )
-        self_config["datamodule"]["split_path"] = os.path.join(assets_path, self_config["datamodule"]["split_path"])
+        for csv_path in ["sequence_data_path", "annotations_path", "metrics_data_path", "split_path"]:
+            self_config["datamodule"][csv_path] = os.path.join(assets_path, self_config["datamodule"][csv_path])
         pika = Pika(self_config)
         pika.train()
         return pika

@@ -3,13 +3,24 @@
 ![Code License](https://img.shields.io/badge/Code%20License-MIT-green.svg)
 ![Data License](https://img.shields.io/badge/Data%20License-CC%20BY%204.0-red.svg)
 
+
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Dataset](#dataset)
+- [Model Checkpoints](#model-checkpoints)
+- [Disclaimer](#disclaimer)
+
+## Introduction
+
 Pika enables scientific question answering about protein sequences.
 
 In [PQA: Zero-shot Protein Question Answering for Free-form Scientific Enquiry with Large Language Models](https://arxiv.org/pdf/2402.13653) we introduce the novel task of zero-shot Protein Question Answering (PQA) for free-form scientific enquiry. Given a previously unseen protein sequence and a natural language question, the task is to deliver a scientifically accurate answer. 
 
 <p align="left"><img src="assets/images/Pika.png" title="Pika Framework" height="500"></p>
 
-## Installation guide
+## Installation
 
 ```bash
 pip install git+https://github.com/EMCarrami/Pika.git
@@ -58,11 +69,12 @@ model.train()
 model.biochem_react_benchmark(model_to_use="best")
 ```
 
-## Dataset & Model Checkpoints
+## Dataset
 
 Complete Pika-DS is available on [HuggingFace](https://huggingface.co/datasets/EMCarrami/Pika-DS)
 
-Model Checkpoints (see [example notebook](https://github.com/EMCarrami/Pika/blob/main/notebooks/scientific_enquiry.ipynb) for usage)
+## Model Checkpoints 
+See [example notebook](https://github.com/EMCarrami/Pika/blob/main/notebooks/scientific_enquiry.ipynb) for usage
 
 | model_type | LLM   | PLM | split basis                  | checkpoint_file                    | partial* |
 |------------|-------|-----|------------------------------|------------------------------------|---------|

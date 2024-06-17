@@ -1,4 +1,5 @@
 import os
+import shutil
 import unittest
 
 from pika.main import Pika
@@ -23,3 +24,8 @@ class TestPika(unittest.TestCase):
         pika = Pika(self_config)
         pika.train()
         return pika
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree("lightning_logs")
+        shutil.rmtree("test_checkpoint")

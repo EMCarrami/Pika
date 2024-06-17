@@ -26,6 +26,7 @@
     "weight_decay": 1e-4
   },
   "checkpoint_callback": {
+    "checkpoint_path": "test_checkpoint",
     "save_partial_checkpoints": true,
     "checkpoint_monitors": ["loss/val_loss"],
     "checkpoint_modes": ["min"]

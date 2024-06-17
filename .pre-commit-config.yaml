@@ -31,7 +31,7 @@ repos:
         --incremental
       ]
       additional_dependencies: [
-        'torch==2.1.0', 'lightning==2.1.0', 'pytorch-lightning==2.1.0', 'lightning-utilities==0.9.0', 'numpy', 'wandb'
+        'torch==2.2.0', 'lightning==2.2.2', 'pytorch-lightning==2.2.2', 'numpy', 'wandb'
       ]
       files: \.py$
 

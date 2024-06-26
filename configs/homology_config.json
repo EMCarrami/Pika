@@ -1,0 +1,19 @@
+{
+  "seed": 0,
+  "datamodule": {
+    "data_dict_path": "../../dataset/data_dict.pkl",
+    "split_path": "evo_split_seed_1.csv",
+    "max_protein_length": 1500,
+    "eval_batch_size": 32,
+    "test_subjects": "all",
+    "num_workers": 0
+  },
+  "baseline": {
+    "homology_dict_path": "evo_split_homology_test.pkl",
+    "out_save_path": "../metrics/results/evo_split_react_0.tsv"
+  },
+  "wandb": {
+    "project": "Cprt-Paper-Baselines",
+    "name": "evo_split_react"
+  }
+}
